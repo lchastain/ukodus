@@ -5,11 +5,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.util.Vector;
 import javax.swing.*;
 
@@ -27,11 +23,8 @@ import javax.swing.*;
 //  Keyboard entry.  Need key listener, also a way to indicate which is active,
 //    and a way to move to another square.
 //
-// Use a boolean / Menu selection to enable/disable the 'training' dialogs.
-//      The instructions at startup
-//      Explanations of pending reductions -
+//  Show explanations of pending reductions -
 //          X-wing, Naked Pair, Hidden Pair
-//      The setting should persist between runs of the program
 //
 // A Save and Restore that provides a way to 'go back'
 //      to a user-selected point.  AND/OR - an 'undo' ?
@@ -44,29 +37,28 @@ import javax.swing.*;
 //
 
 
-public class Dyevat extends JPanel implements ActionListener {
-    public static final long serialVersionUID = 1L;
+public class Laffingas extends JPanel implements ActionListener {
+    public static final int DEFINING = Values.DEFINING;
+    public static final int SOLVING = Values.SOLVING;
+    public static final int SOLVED = Values.SOLVED;
 
-    public static final int DEFINING = 88;
-    public static final int SOLVING = 89;
-    public static final int SOLVED = 90;
-
-    public static final int ROBOX = 91;
-    public static final int COBOX = 92;
-    public static final int BOXRO = 93;
-    public static final int BOXCO = 94;
-    public static final int BOX = 95;
-    public static final int COL = 96;
-    public static final int ROW = 97;
+    public static final int ROBOX = Values.ROBOX;
+    public static final int COBOX = Values.COBOX;
+    public static final int BOXRO = Values.BOXRO;
+    public static final int BOXCO = Values.BOXCO;
+    public static final int BOX = Values.BOX;
+    public static final int COL = Values.COL;
+    public static final int ROW = Values.ROW;
 
     private static JFrame theFrame;
+    private static Laffingas theMatrix;
     private Vector<JLabel> squares;
-    private MouseAdapter ma;
     private int intState;
     private Color theOriginalBackground;
     private Color theHighlightBackground;
+    private JButton jbSave;
     private JButton jbStart;   // After Start, text changes from 'Start' to 'Next'
-    private JButton jbReset;   // After Start, text changes from 'Last' to 'Reset'
+    private JButton jbReset;   // 'Reset' becomes visible after Start
     private JButton jbAuto;    // Becomes visible after Start
     private int intLastFoundIndex;
     private int intNakedIndex1;
@@ -76,7 +68,6 @@ public class Dyevat extends JPanel implements ActionListener {
     private String referenceArray[]; // The square texts after the last 'Next'.
     private boolean pendingReductions;
     private boolean blnAutoSolve;
-    private String theLastString;
     private boolean hadPendingReductions;  // Need to know if we ever did.
 
     //---------------------------------------------------------------------
@@ -91,7 +82,7 @@ public class Dyevat extends JPanel implements ActionListener {
 
     private int theArray[][];   // Will 'point' to one of the other three after 'setTheArray'.
 
-    public Dyevat() {
+    public Laffingas() {
         super(new BorderLayout());
 
         // Initializations
@@ -100,12 +91,11 @@ public class Dyevat extends JPanel implements ActionListener {
         intLastFoundIndex = -1;
         foundArray = new int[81];
         referenceArray = new String[81];
-        theLastString = "";
         hadPendingReductions = false;
         blnAutoSolve = false;
         resetReductionVars();  // In this case, it is a 'set', not 'reset'.
 
-        ma = new MouseAdapter() {
+        MouseAdapter ma = new MouseAdapter() {
             public void mousePressed(MouseEvent e) {
 
                 String theValues = " 123456789";
@@ -144,7 +134,7 @@ public class Dyevat extends JPanel implements ActionListener {
                     jl.setForeground(Color.blue);
                 } // end if
             } // end mousePressed
-        }; // end mouseAdapter definition
+        };
 
         JPanel centerPanel = new JPanel(new GridLayout(3, 3, 0, 0));
         JPanel southPanel = new JPanel(new FlowLayout());
@@ -154,11 +144,16 @@ public class Dyevat extends JPanel implements ActionListener {
 
         // Fill the 3x3 grid with 9 Sbox
         for (int i = 1; i <= 9; i++) {
-            centerPanel.add(new Sbox());
+            Sbox s = new Sbox(ma);
+            centerPanel.add(s);
+            squares.addAll(s.getSquares());
         } // end for
 
         // Preserve the original background color
-        theOriginalBackground = ((JLabel) squares.elementAt(0)).getBackground();
+        theOriginalBackground = (squares.elementAt(0)).getBackground();
+
+        jbSave = new JButton("Save");
+        jbSave.addActionListener(this);
 
         jbStart = new JButton("Start");
         jbStart.addActionListener(this);
@@ -170,9 +165,10 @@ public class Dyevat extends JPanel implements ActionListener {
         JButton jbNew = new JButton("New");
         jbNew.addActionListener(this);
 
-        jbReset = new JButton("Last");
+        jbReset = new JButton("Reset");
         jbReset.addActionListener(this);
 
+        southPanel.add(jbSave);
         southPanel.add(jbStart);
         southPanel.add(jbAuto);
         southPanel.add(jbNew);
@@ -190,7 +186,7 @@ public class Dyevat extends JPanel implements ActionListener {
         highlightOff();
 
         //------------------------------------------------------------
-        if (e.getActionCommand() == "Start") {
+        if (e.getActionCommand().equals("Start")) {
             // Check validity of entered squares.
 
             // First look to see if ALL are empty
@@ -213,35 +209,17 @@ public class Dyevat extends JPanel implements ActionListener {
             if (!checkDuplicates(COL)) return;
             if (!checkDuplicates(BOX)) return;
 
-            // Change the 'Last' to 'Reset'.
-            jbReset.setText("Reset");
-
             // Allow 'Auto' to show now.
             jbAuto.setVisible(true);
 
-            // Create a string that represents the current makeup of the matrix
-            String newLastString = "";
-            JLabel jl;
-            for (int i = 0; i < (9 * 9); i++) {
-                jl = (JLabel) squares.elementAt(i);
-                String s = jl.getText().trim();
-                if (s.equals("")) {
-                    newLastString += "0";
-                } else {
-                    newLastString += s;
-                } // end if
-            } // end for
-
-            // Write out the current setup into the 'Last.txt' file.  If any
-            //   problems, abandon the attempt.
-            if (!newLastString.equals(theLastString)) { // Only write out if different.
-                try {
-                    BufferedWriter out = new BufferedWriter(new FileWriter("Last.txt"));
-                    out.write(newLastString);
-                    out.close();
-                } catch (IOException ioe) {
-                } // end try/catch
-            } // end if
+            // Write out the current matrix into the 'last.txt' file.
+            try {
+                BufferedWriter out = new BufferedWriter(new FileWriter("last.txt"));
+                out.write(stringifyMatrix());
+                out.close();
+            } catch (IOException ioe) {
+                System.out.println(ioe.getMessage());
+            } // end try/catch
 
             intState = SOLVING;
             jb.setText("Next");
@@ -272,34 +250,103 @@ public class Dyevat extends JPanel implements ActionListener {
         } // end if 'Start'
 
         //------------------------------------------------------------
-        if (e.getActionCommand() == "Quit") {
+        if (e.getActionCommand().equals("Quit")) {
             System.exit(0);
         } // end if
 
         //------------------------------------------------------------
-        if (e.getActionCommand() == "Auto On") setAutomatic(true);
-        if (e.getActionCommand() == "Auto Off") setAutomatic(false);
+        if (e.getActionCommand().equals("Auto On")) setAutomatic(true);
+        if (e.getActionCommand().equals("Auto Off")) setAutomatic(false);
 
         //------------------------------------------------------------
-        if (e.getActionCommand() == "Next") handleNextClick();
+        if (e.getActionCommand().equals("Next")) handleNextClick();
 
         //------------------------------------------------------------
-        // The button text may be either 'Last' or 'Reset'
         if (e.getSource() == jbReset) {
             loadLast();
+            jbAuto.setVisible(false);
         } // end if
 
+        if (e.getActionCommand().equals(Values.lastButton)) {
+            loadLast();
+            theFrame.setContentPane(theMatrix);
+        } // end if
+
+        if (e.getActionCommand().equals("Save")) {
+            try {
+                //Create a file chooser
+                final JFileChooser fc = new JFileChooser("data");
+
+                int returnVal = fc.showSaveDialog(theFrame);
+
+                if (returnVal == JFileChooser.APPROVE_OPTION) {
+                    File file = fc.getSelectedFile();
+                    System.out.println("Saving: " + file.getName() + ".");
+                    BufferedWriter out = new BufferedWriter(new FileWriter(file.getAbsolutePath()));
+                    out.write(stringifyMatrix());
+                    out.close();
+                } else {
+                    System.out.println("Save operation cancelled by user.");
+                }
+            } catch (IOException ioe) {
+                System.out.println(ioe.getMessage());
+            } // end try/catch
+        }
+
+
         //------------------------------------------------------------
-        if (e.getActionCommand() == "New") {
+        if (e.getActionCommand().equals("New")) {
             intState = DEFINING;
             jbStart.setText("Start");
-            jbReset.setText("Last");
             clear();
             for (JLabel jl : squares) {
                 jl.setToolTipText(null);
             }
         } // end if
+
+        if (e.getActionCommand().equals(Values.defineButton)) {
+            theFrame.setContentPane(theMatrix);
+            // 'New'
+            intState = DEFINING;
+            jbStart.setText("Start");
+            clear();
+            for (JLabel jl : squares) {
+                jl.setToolTipText(null);
+            }
+        }
+
+        if (e.getActionCommand().equals(Values.loadButton)) {
+            handleMenuBar("Open");
+        }
+
+        if (e.getActionCommand().equals(Values.helpButton)) {
+            try {
+                Runtime.getRuntime().exec("hh help" + File.separatorChar + "ukodus.chm");
+            } catch(IOException ioe) {
+                System.out.println(ioe.getMessage());
+            } // end try/catch
+        }
+
+        System.out.println("Handled " + e.getActionCommand());
     } // end actionPerformed
+
+
+    // Create and return a string that represents the current makeup of the matrix
+    public String stringifyMatrix() {
+        String returnString = "";
+        JLabel jl;
+        for (int i = 0; i < (9 * 9); i++) {
+            jl = squares.elementAt(i);
+            String s = jl.getText().trim();
+            if (s.equals("")) {
+                returnString += "0";
+            } else {
+                returnString += s;
+            } // end if
+        } // end for
+
+        return returnString;
+    }
 
     public void clear() {
         highlightOff();
@@ -334,9 +381,9 @@ public class Dyevat extends JPanel implements ActionListener {
 
         //System.out.println("squares: " + squares.size());
         for (int i = 0; i < 9; i++) {  // Dimension 1 iterator
-            tmpVals = new String(values);
+            tmpVals = values;
             for (int j = 0; j < 9; j++) { // Dimension 2 iterator
-                jl = (JLabel) squares.elementAt(theArray[i][j]);
+                jl = squares.elementAt(theArray[i][j]);
                 boxVal = jl.getText();
                 if (boxVal.trim().equals("")) continue;
                 intTmp = tmpVals.indexOf(boxVal.trim());
@@ -422,7 +469,7 @@ public class Dyevat extends JPanel implements ActionListener {
     public void define(int index, int val) {
 
         JLabel jl;
-        jl = (JLabel) squares.elementAt(index);
+        jl = squares.elementAt(index);
 
         jl.setText(String.valueOf(val));
         jl.setToolTipText(String.valueOf(val));
@@ -467,9 +514,9 @@ public class Dyevat extends JPanel implements ActionListener {
         //   already be off, by virtue of the fact that it goes off with
         //   every click of 'Next'.
 
-        boolean b = false;
+        boolean b;
 
-        if (!b) b = findNakedPair(BOX);
+        b = findNakedPair(BOX);
         if (!b) b = findNakedPair(COL);
         if (!b) b = findNakedPair(ROW);
 
@@ -486,7 +533,8 @@ public class Dyevat extends JPanel implements ActionListener {
 //    if(!b) b = findOutsideBox(BOXCO);
 
         if (!b) {
-            showMessage("Cannot find the next location; check back after your next selection.");
+            showMessage("Cannot find the next location; you must make one manually, " +
+                    "then try again.");
             blnAutoSolve = false;
             jbAuto.setText("Auto On");
         } // end if
@@ -503,8 +551,8 @@ public class Dyevat extends JPanel implements ActionListener {
         int index2;   // Index of the second square of the potential pair
         String strValues;     // All values in the area
         String strPairValues; // Values that occur twice
-        String strValue1 = null;
-        String strValue2 = null;
+        String strValue1;
+        String strValue2;
 
         int aCount;
         String allValues = "123456789";
@@ -669,7 +717,7 @@ public class Dyevat extends JPanel implements ActionListener {
     public boolean findHighlander() {
         JLabel jl;
         for (int i = 0; i < (9 * 9); i++) {
-            jl = (JLabel) squares.elementAt(i);
+            jl = squares.elementAt(i);
             if (!jl.getText().trim().equals("")) continue;
             if (jl.getToolTipText().trim().length() == 1) {
                 showIntersects(i); // highlight the row, col, box
@@ -839,7 +887,7 @@ public class Dyevat extends JPanel implements ActionListener {
         if (theArray == null) return false;
 
         for (int i = 0; i < (9 * 9); i++) {
-            jl = (JLabel) squares.elementAt(i);
+            jl = squares.elementAt(i);
             if (!jl.getText().trim().equals("")) continue;
 
             theValues = jl.getToolTipText().trim();
@@ -853,7 +901,7 @@ public class Dyevat extends JPanel implements ActionListener {
                 for (int k = 0; k < 9; k++) {
                     jlTmp = squares.elementAt(theArray[theArea][k]);
                     if (!jlTmp.getText().trim().equals("")) continue;
-                    if (jlTmp.getToolTipText().indexOf(theChar) >= 0) theCount++;
+                    if (jlTmp.getToolTipText().contains(theChar)) theCount++;
                 } // end for k
                 //System.out.println("Looking for " + theChar + "; found " + theCount);
 
@@ -915,7 +963,7 @@ public class Dyevat extends JPanel implements ActionListener {
             // When found, add to 'theTwins' vector.
             for (j = 0; j < 9; j++) { // For each square in the area
                 theIndex = theArray[i][j];
-                jl = (JLabel) squares.elementAt(theIndex);
+                jl = squares.elementAt(theIndex);
 
                 // If the square under examination is not empty, keep looking.
                 if (!jl.getText().trim().equals("")) continue;
@@ -1200,7 +1248,7 @@ public class Dyevat extends JPanel implements ActionListener {
         // If that didn't work, we become Tonto -
         if (!b) b = findLoneRanger(BOX);
         if (!b) b = findLoneRanger(COL);
-        if (!b) b = findLoneRanger(ROW);
+        if (!b) findLoneRanger(ROW);
 
         if (intLastFoundIndex >= 0) {
             System.out.println("\t\t\tFound Count: " + countFound() + "\t\tLast Index: " + intLastFoundIndex);
@@ -1249,19 +1297,19 @@ public class Dyevat extends JPanel implements ActionListener {
 
         // Get the ROW intersects
         for (int i = 0; i < 9; i++) {
-            jl = (JLabel) squares.elementAt(rowIndices[theRow][i]);
+            jl = squares.elementAt(rowIndices[theRow][i]);
             strReturn += jl.getText().trim();
         } // end for
 
         // Get the COL intersects
         for (int i = 0; i < 9; i++) {
-            jl = (JLabel) squares.elementAt(colIndices[theCol][i]);
+            jl = squares.elementAt(colIndices[theCol][i]);
             strReturn += jl.getText().trim();
         } // end for
 
         // Get the BOX intersects
         for (int i = 0; i < 9; i++) {
-            jl = (JLabel) squares.elementAt(boxIndices[theBox][i]);
+            jl = squares.elementAt(boxIndices[theBox][i]);
             strReturn += jl.getText().trim();
         } // end for
 
@@ -1301,6 +1349,23 @@ public class Dyevat extends JPanel implements ActionListener {
 
 
     private void handleMenuBar(String what) {
+        if (what.equals("Open")) {
+            //Create a file chooser
+            final JFileChooser fc = new JFileChooser("data");
+
+            //In response to a button click:
+            int returnVal = fc.showOpenDialog(theFrame);
+
+            if (returnVal == JFileChooser.APPROVE_OPTION) {
+                theFrame.setContentPane(theMatrix);
+                File file = fc.getSelectedFile();
+                System.out.println("Opening: " + file.getName() + ".");
+                loadFile(file.getAbsolutePath());
+            } else {
+                System.out.println("Open command cancelled by user.");
+            }
+        } // end if
+
         if (what.equals("Exit")) System.exit(0);
 
         if (what.equals("Remove Highlighting")) {
@@ -1310,13 +1375,9 @@ public class Dyevat extends JPanel implements ActionListener {
         } // end if
 
         if (what.equals("Getting Started")) {
-            String s = "Click on individual squares as needed to define the ";
-            s += "starting point, then click 'Start'.  \nIf there are duplicate ";
-            s += "numbers in a row, column or box, the relevant section will be highlighted ";
-            s += "for you to easily see where a correction is needed.  \nOtherwise, the solution ";
-            s += "phase will begin and the next box with a single possible value ";
-            s += "will be highlighted for your entry.";
-            showMessage(s);
+            theFrame.setContentPane(new InitialInfo(theMatrix));
+            ((JPanel)theFrame.getContentPane()).revalidate();
+            theFrame.repaint();
         } // end if
 
     } // end handleMenuBar
@@ -1382,6 +1443,7 @@ public class Dyevat extends JPanel implements ActionListener {
                     try {
                         Thread.sleep(700);
                     } catch (InterruptedException ie) {
+                        System.out.println(ie.getMessage());
                     }
                     handleNextClick();
                 }
@@ -1396,7 +1458,7 @@ public class Dyevat extends JPanel implements ActionListener {
         JLabel jl;
 
         for (int i = 0; i < (9 * 9); i++) {
-            jl = (JLabel) squares.elementAt(i);
+            jl = squares.elementAt(i);
             jl.setBackground(theOriginalBackground);
             jl.setBorder(BorderFactory.createLineBorder(Color.black, 1));
         } // end for
@@ -1749,31 +1811,42 @@ public class Dyevat extends JPanel implements ActionListener {
     // Method Name: loadLast
     //
     // Loads in the last matrix that was evaluated, if it was possible
-    //   to save it upon definition and if it is still there.  If any
-    //   problem, the user will not see any response to their request.
+    //   to save it upon definition and if it is still there.
     //--------------------------------------------------------------------------
     public void loadLast() {
+        loadFile("last.txt");
+    } // end loadLast
+
+
+    //--------------------------------------------------------------------------
+    // Method Name: loadFile
+    //
+    // Loads in the specified file.  Full file/path should be provided.
+    //--------------------------------------------------------------------------
+    public void loadFile(String filename) {
         clear();
         intState = DEFINING;
         jbStart.setText("Start");
-        theLastString = "";
+        String theString = "";
 
-        int theValue = 0;
+        int theValue;
         try {
-            BufferedReader in = new BufferedReader(new FileReader("Last.txt"));
-            theLastString = in.readLine();
+            BufferedReader in = new BufferedReader(new FileReader(filename));
+            theString = in.readLine();
             in.close();
 
-            if (theLastString.length() > 81) theLastString = theLastString.substring(0, 81);
-            for (int i = 0; i < theLastString.length(); i++) {
-                theValue = Integer.parseInt(theLastString.substring(i, i + 1));
+            if (theString.length() > 81) theString = theString.substring(0, 81);
+            for (int i = 0; i < theString.length(); i++) {
+                theValue = Integer.parseInt(theString.substring(i, i + 1));
                 if (theValue != 0) define(i, theValue);
             } // end for i
             //System.out.println(str);
         } catch (IOException ioe) {
+            System.out.println(ioe.getMessage());
         } catch (Exception e) {
+            System.out.println(e.getMessage());
         } // end try/catch
-    } // end loadLast
+    } // end loadFile
 
 
     // These settings need to be done in multiple places
@@ -1804,7 +1877,7 @@ public class Dyevat extends JPanel implements ActionListener {
         // First, look to see if a value for the square has been set and if so,
         //   reduce its choices to only that value and the option to clear it.
         for (int i = 0; i < (9 * 9); i++) {
-            jl = (JLabel) squares.elementAt(i);
+            jl = squares.elementAt(i);
 
             // If there is a value selected for the square
             if (!jl.getText().trim().equals("")) {
@@ -1988,7 +2061,7 @@ public class Dyevat extends JPanel implements ActionListener {
         String theIntersects;
 
         for (int i = 0; i < (9 * 9); i++) {
-            jl = (JLabel) squares.elementAt(i);
+            jl = squares.elementAt(i);
             referenceArray[i] = jl.getText();
 
             // If the text is not empty, set the tool tip text to that text, only.
@@ -2035,41 +2108,13 @@ public class Dyevat extends JPanel implements ActionListener {
         } // end if
     } // end setAutomatic
 
+    public void showMatrix() {
 
-    // Inner class
-    class Sbox extends JPanel {
-        public static final long serialVersionUID = 1L;
-
-        public Sbox() {
-            super(new GridLayout(3, 3, 0, 0));
-            setBorder(BorderFactory.createLineBorder(Color.black, 2));
-
-            for (int i = 1; i <= 9; i++) {
-                // JLabel jl = new JLabel(String.valueOf(i));
-                JLabel jl = new JLabel(" ");
-                squares.addElement(jl);
-                jl.setBorder(BorderFactory.createLineBorder(Color.black, 1));
-                jl.setOpaque(true);
-                jl.setFont(Font.decode("Dialog-38"));
-                jl.setHorizontalAlignment(JLabel.CENTER);
-                jl.setVerticalAlignment(JLabel.CENTER);
-                jl.addMouseListener(ma);
-                add(jl);
-            } // end for
-
-        } // end constructor
-
-        public Insets getInsets() {
-            return new Insets(0, 0, 0, 0);
-        } // end getInsets
-
-        public Dimension getPreferredSize() {
-            return new Dimension(130, 130);
-        } // end getPreferredSize
-    } // end class Sbox
+    }
 
     public static void main(String args[]) {
         JMenu jmFile = new JMenu("File");
+        jmFile.add(new JMenuItem("Open"));
         jmFile.add(new JMenuItem("Exit"));
 
         JMenu jmView = new JMenu("View");
@@ -2084,23 +2129,19 @@ public class Dyevat extends JPanel implements ActionListener {
         jmb.add(Box.createHorizontalGlue());
         jmb.add(jmHelp);
 
-        final Dyevat ss = new Dyevat();
-        theFrame = new JFrame("Dyevat");
+        theMatrix = new Laffingas();
+        theFrame = new JFrame("Laffingas");
         theFrame.setJMenuBar(jmb);
 
         ActionListener al = new ActionListener() {
             public void actionPerformed(ActionEvent ae) {
                 String what = ae.getActionCommand();
-                ss.handleMenuBar(what);
+                theMatrix.handleMenuBar(what);
             } // end actionPerformed
         };
 
         //---------------------------------------------------------
         // Add the above handler to all menu items.
-        //---------------------------------------------------------
-        // Note - if you need cascading menus in the future, use
-        //   the recursive version of this as implemented in
-        //   LogPane.java, a now archived predecessor to LogTree.
         //---------------------------------------------------------
         int numMenus = jmb.getMenuCount();
         // log.debug("Number of menus found: " + numMenus);
@@ -2116,16 +2157,16 @@ public class Dyevat extends JPanel implements ActionListener {
         } // end for i
         //---------------------------------------------------------
 
-
         theFrame.addWindowListener(new java.awt.event.WindowAdapter() {
             public void windowClosing(java.awt.event.WindowEvent we) {
                 System.exit(0);
             }
         });
         theFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        theFrame.setContentPane(ss);
-        theFrame.pack();
+        theFrame.setContentPane(theMatrix);
+        theFrame.pack();  // This sets the frame size to fit the solution matrix.
         theFrame.setLocationRelativeTo(null);
+        theFrame.setContentPane(new InitialInfo(theMatrix));
         theFrame.setVisible(true);
 
     } // end of the main method
