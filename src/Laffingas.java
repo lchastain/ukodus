@@ -1,4 +1,3 @@
-
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -18,78 +17,66 @@ import javax.swing.*;
     South panel contains a centered line of buttons
 */
 
-
-// Add:  
-//  Keyboard entry.  Need key listener, also a way to indicate which is active,
-//    and a way to move to another square.
-//
-//  Show explanations of pending reductions -
-//          X-wing, Naked Pair, Hidden Pair
-//
-// A Save and Restore that provides a way to 'go back'
-//      to a user-selected point.  AND/OR - an 'undo' ?
-//
-// A way to select the reduction methodologies that are to be used, 
-//      and the order that they are to be used in.
-//
-// Recognize when the reductions have removed all possibilities -
-//   show an invalid puzzle and stop.
-//
-
-
-public class Laffingas extends JPanel implements ActionListener {
-    public static final int DEFINING = Values.DEFINING;
-    public static final int SOLVING = Values.SOLVING;
-    public static final int SOLVED = Values.SOLVED;
-
-    public static final int ROBOX = Values.ROBOX;
-    public static final int COBOX = Values.COBOX;
-    public static final int BOXRO = Values.BOXRO;
-    public static final int BOXCO = Values.BOXCO;
-    public static final int BOX = Values.BOX;
-    public static final int COL = Values.COL;
-    public static final int ROW = Values.ROW;
-
+public class Laffingas extends JPanel implements Values, ActionListener {
     private static JFrame theFrame;
-    private static Laffingas theMatrix;
     private Vector<JLabel> squares;
     private int intState;
     private Color theOriginalBackground;
     private Color theHighlightBackground;
-    private JButton jbSave;
     private JButton jbStart;   // After Start, text changes from 'Start' to 'Next'
+    private JButton jbSave;    // After Start, this one should go away.
     private JButton jbReset;   // 'Reset' becomes visible after Start
-    private JButton jbAuto;    // Becomes visible after Start
+    private JButton jbAuto;    // 'Auto On' becomes visible after Start
     private int intLastFoundIndex;
     private int intNakedIndex1;
     private int intNakedIndex2;
     private int intNakedIndex3;
-    private int foundArray[];   // The indexes of each 'found' square (will never be 81)
+    private int foundArray[];   // The indexes of each 'found' square (up to 80 of them)
     private String referenceArray[]; // The square texts after the last 'Next'.
     private boolean pendingReductions;
     private boolean blnAutoSolve;
     private boolean hadPendingReductions;  // Need to know if we ever did.
+    private String definitionName;
 
-    //---------------------------------------------------------------------
-    // The values in the indices declared here rely on the placement of the
-    //   labels in the squares array.  The labels are entered in a specific
-    //   order and are never reordered after that, so this major dependency
-    //   can be considered to be stable, if not necessarily obvious.
-    //---------------------------------------------------------------------
-    private int boxIndices[][];  // see 'initializeIndices' for more info.
-    private int colIndices[][];
-    private int rowIndices[][];
+    //------------------------------------------------------------------
+    // These index assignments could also be done via calculations
+    //   but this 'brute force' method is more readable / understandable.
+    //   The values were obtained by printing out a 9x9 matrix of squareFs
+    //   and then filling in the index values (top left = 0) in the same
+    //   order that they are created in the constructor.  Since that
+    //   sequence is by Boxes rather than rows or columns, the first
+    //   group is very straightforward; just 0-80.  The next two groups
+    //   are a bit more jumbled as a result of extracting the columns
+    //   and rows from each 'box' in the order that it first appeared in
+    //   the 'squares' array.
+    //------------------------------------------------------------------
+    private final int[][] boxIndices = {  { 0, 1, 2, 3, 4, 5, 6, 7, 8},
+            { 9,10,11,12,13,14,15,16,17}, {18,19,20,21,22,23,24,25,26},
+            {27,28,29,30,31,32,33,34,35}, {36,37,38,39,40,41,42,43,44},
+            {45,46,47,48,49,50,51,52,53}, {54,55,56,57,58,59,60,61,62},
+            {63,64,65,66,67,68,69,70,71}, {72,73,74,75,76,77,78,79,80} };
+    private final int[][] colIndices = {  { 0, 3, 6,27,30,33,54,57,60},
+            { 1, 4, 7,28,31,34,55,58,61}, { 2, 5, 8,29,32,35,56,59,62},
+            { 9,12,15,36,39,42,63,66,69}, {10,13,16,37,40,43,64,67,70},
+            {11,14,17,38,41,44,65,68,71}, {18,21,24,45,48,51,72,75,78},
+            {19,22,25,46,49,52,73,76,79}, {20,23,26,47,50,53,74,77,80} };
+    private final int[][] rowIndices = {  { 0, 1, 2, 9,10,11,18,19,20},
+            { 3, 4, 5,12,13,14,21,22,23}, { 6, 7, 8,15,16,17,24,25,26},
+            {27,28,29,36,37,38,45,46,47}, {30,31,32,39,40,41,48,49,50},
+            {33,34,35,42,43,44,51,52,53}, {54,55,56,63,64,65,72,73,74},
+            {57,58,59,66,67,68,75,76,77}, {60,61,62,69,70,71,78,79,80} };
 
     private int theArray[][];   // Will 'point' to one of the other three after 'setTheArray'.
 
-    public Laffingas() {
+    public Laffingas(JFrame theFrame) {
         super(new BorderLayout());
+
+        Laffingas.theFrame = theFrame;
 
         // Initializations
         intState = DEFINING;
-        initializeIndices(); // Values do not change after initial setting.
         intLastFoundIndex = -1;
-        foundArray = new int[81];
+        foundArray = new int[80];
         referenceArray = new String[81];
         hadPendingReductions = false;
         blnAutoSolve = false;
@@ -166,6 +153,7 @@ public class Laffingas extends JPanel implements ActionListener {
         jbNew.addActionListener(this);
 
         jbReset = new JButton("Reset");
+        jbReset.setVisible(false);
         jbReset.addActionListener(this);
 
         southPanel.add(jbSave);
@@ -179,13 +167,14 @@ public class Laffingas extends JPanel implements ActionListener {
     } // end constructor
 
 
+    // Handles ALL button clicks - from the South panel as well as the startup view.
     public void actionPerformed(ActionEvent e) {
         JButton jb = (JButton) e.getSource();
 
         // Clear previous highlighting, if any.
         highlightOff();
 
-        //------------------------------------------------------------
+        // Start
         if (e.getActionCommand().equals("Start")) {
             // Check validity of entered squares.
 
@@ -209,8 +198,12 @@ public class Laffingas extends JPanel implements ActionListener {
             if (!checkDuplicates(COL)) return;
             if (!checkDuplicates(BOX)) return;
 
-            // Allow 'Auto' to show now.
+            // Allow 'Auto' and 'Reset' to show now.
             jbAuto.setVisible(true);
+            jbReset.setVisible(true);
+
+            // Do not allow saving of (partial) solutions; only puzzle definitions.
+            jbSave.setVisible(false);
 
             // Write out the current matrix into the 'last.txt' file.
             try {
@@ -249,42 +242,78 @@ public class Laffingas extends JPanel implements ActionListener {
             findNext();
         } // end if 'Start'
 
-        //------------------------------------------------------------
+        //  Quit
         if (e.getActionCommand().equals("Quit")) {
             System.exit(0);
         } // end if
 
-        //------------------------------------------------------------
+        // Auto settings
         if (e.getActionCommand().equals("Auto On")) setAutomatic(true);
         if (e.getActionCommand().equals("Auto Off")) setAutomatic(false);
 
-        //------------------------------------------------------------
+        // Next
         if (e.getActionCommand().equals("Next")) handleNextClick();
 
-        //------------------------------------------------------------
+        // Reset
         if (e.getSource() == jbReset) {
             loadLast();
             jbAuto.setVisible(false);
+            jbReset.setVisible(false);
+            jbSave.setVisible(true);
         } // end if
 
-        if (e.getActionCommand().equals(Values.lastButton)) {
+        // Load the previous.. (same as 'Reset')
+        if (e.getActionCommand().equals(lastButton)) {
             loadLast();
-            theFrame.setContentPane(theMatrix);
+            jbAuto.setVisible(false);
+            jbReset.setVisible(false);
+            jbSave.setVisible(true);
+            theFrame.setContentPane(this);
         } // end if
 
+        // Save
         if (e.getActionCommand().equals("Save")) {
             try {
                 //Create a file chooser
                 final JFileChooser fc = new JFileChooser("data");
+                if(definitionName != null && !definitionName.trim().equals("")) {
+                    fc.setSelectedFile(new File(definitionName));
+                }
 
                 int returnVal = fc.showSaveDialog(theFrame);
 
                 if (returnVal == JFileChooser.APPROVE_OPTION) {
                     File file = fc.getSelectedFile();
-                    System.out.println("Saving: " + file.getName() + ".");
-                    BufferedWriter out = new BufferedWriter(new FileWriter(file.getAbsolutePath()));
-                    out.write(stringifyMatrix());
-                    out.close();
+                    String newName = file.getName();
+
+                    boolean warnOverwrite = true;
+
+                    // Are we re-saving the same file that we loaded?
+                    // If so, no overwrite warning will be given.
+                    if(definitionName != null && !definitionName.isEmpty()) {
+                        if(newName.equals(definitionName)) {
+                            warnOverwrite = false;
+                        }
+                    }
+
+                    if(warnOverwrite && file.exists()) {
+                        String message = "A file with the chosen name already exists " +
+                                "in this location." + System.lineSeparator() +
+                                "Are you sure you want to overwrite it?";
+                        String title = "Save / Overwrite";
+                        int reply = JOptionPane.showConfirmDialog(null, message, title, JOptionPane.YES_NO_OPTION);
+                        if (reply == JOptionPane.YES_OPTION)
+                        {
+                            System.out.println("Saving: " + file.getName() + ".");
+                            BufferedWriter out = new BufferedWriter(new FileWriter(file.getAbsolutePath()));
+                            out.write(stringifyMatrix());
+                            out.close();
+                            definitionName = newName;
+                            theFrame.setTitle(baseTitle + " - " + definitionName);
+                        } else {
+                            System.out.println("Save/overwrite operation cancelled by user.");
+                        }
+                    }
                 } else {
                     System.out.println("Save operation cancelled by user.");
                 }
@@ -293,33 +322,42 @@ public class Laffingas extends JPanel implements ActionListener {
             } // end try/catch
         }
 
-
-        //------------------------------------------------------------
+        // The 'New' button (on the South panel)
         if (e.getActionCommand().equals("New")) {
             intState = DEFINING;
+            definitionName = "";
+            theFrame.setTitle(baseTitle);
             jbStart.setText("Start");
+            jbAuto.setVisible(false);
+            jbReset.setVisible(false);
+            jbSave.setVisible(true);
             clear();
             for (JLabel jl : squares) {
                 jl.setToolTipText(null);
             }
         } // end if
 
-        if (e.getActionCommand().equals(Values.defineButton)) {
-            theFrame.setContentPane(theMatrix);
-            // 'New'
+        // The 'Define New' button, from the startup panel (almost same as above)
+        if (e.getActionCommand().equals(defineButton)) {
+            theFrame.setContentPane(this);
             intState = DEFINING;
             jbStart.setText("Start");
+            jbAuto.setVisible(false);
+            jbReset.setVisible(false);
+            jbSave.setVisible(true);
             clear();
             for (JLabel jl : squares) {
                 jl.setToolTipText(null);
             }
         }
 
-        if (e.getActionCommand().equals(Values.loadButton)) {
-            handleMenuBar("Open");
+        // The 'Load a saved..' button, from the startup panel
+        if (e.getActionCommand().equals(loadButton)) {
+            handleMenuBar("Open...");
+            jbSave.setVisible(true);
         }
 
-        if (e.getActionCommand().equals(Values.helpButton)) {
+        if (e.getActionCommand().equals(helpButton)) {
             try {
                 Runtime.getRuntime().exec("hh help" + File.separatorChar + "ukodus.chm");
             } catch(IOException ioe) {
@@ -352,7 +390,7 @@ public class Laffingas extends JPanel implements ActionListener {
         highlightOff();
         resetReductionVars();
         hadPendingReductions = false;
-        foundArray = new int[81];
+        foundArray = new int[80];
         referenceArray = new String[81];
         for (JLabel jl : squares) {
             jl.setText(" ");
@@ -533,8 +571,9 @@ public class Laffingas extends JPanel implements ActionListener {
 //    if(!b) b = findOutsideBox(BOXCO);
 
         if (!b) {
-            showMessage("Cannot find the next location; you must make one manually, " +
-                    "then try again.");
+            showMessage("Cannot find another square to reduce or resolve logically; " +
+                    System.lineSeparator() +
+                    "you can try again after entering one or more on your own.");
             blnAutoSolve = false;
             jbAuto.setText("Auto On");
         } // end if
@@ -1348,8 +1387,8 @@ public class Laffingas extends JPanel implements ActionListener {
     } // end getPosition
 
 
-    private void handleMenuBar(String what) {
-        if (what.equals("Open")) {
+    public void handleMenuBar(String what) {
+        if (what.equals("Open...")) {
             //Create a file chooser
             final JFileChooser fc = new JFileChooser("data");
 
@@ -1357,12 +1396,14 @@ public class Laffingas extends JPanel implements ActionListener {
             int returnVal = fc.showOpenDialog(theFrame);
 
             if (returnVal == JFileChooser.APPROVE_OPTION) {
-                theFrame.setContentPane(theMatrix);
+                theFrame.setContentPane(this);
                 File file = fc.getSelectedFile();
-                System.out.println("Opening: " + file.getName() + ".");
+                definitionName = file.getName();
+                System.out.println("Opening: " + definitionName + ".");
                 loadFile(file.getAbsolutePath());
+                theFrame.setTitle(baseTitle + " - " + definitionName);
             } else {
-                System.out.println("Open command cancelled by user.");
+                System.out.println("The 'File/Open' action was cancelled by user.");
             }
         } // end if
 
@@ -1374,10 +1415,19 @@ public class Laffingas extends JPanel implements ActionListener {
             resetReductionVars();
         } // end if
 
-        if (what.equals("Getting Started")) {
-            theFrame.setContentPane(new InitialInfo(theMatrix));
-            ((JPanel)theFrame.getContentPane()).revalidate();
+        if (what.equals("Restart")) {
+            theFrame.setContentPane(new InitialInfo(this));
+            theFrame.getContentPane().revalidate();
             theFrame.repaint();
+            theFrame.setTitle(baseTitle);
+        } // end if
+
+        if (what.equals("Documentation")) {
+            try {
+                Runtime.getRuntime().exec("hh help" + File.separatorChar + "ukodus.chm");
+            } catch(IOException ioe) {
+                System.out.println(ioe.getMessage());
+            } // end try/catch
         } // end if
 
     } // end handleMenuBar
@@ -1480,269 +1530,6 @@ public class Laffingas extends JPanel implements ActionListener {
     } // end highlightOn
 
 
-    //------------------------------------------------------------------
-    // These index assignments could also be done via calculations
-    //   but this 'brute force' method is more readable / understandable.
-    //   The values were obtained by printing out a 9x9 matrix of squares
-    //   and then filling in the values (top left = 0) in the same
-    //   order that they are created in the constructor.  Since that
-    //   sequence is by Boxes rather than rows or columns, this first
-    //   group is very straightforward; just 0-80.  The next two groups
-    //   are a bit more jumbled.
-    //------------------------------------------------------------------
-    public void initializeIndices() {
-        boxIndices = new int[9][9];
-        boxIndices[0][0] = 0;
-        boxIndices[0][1] = 1;
-        boxIndices[0][2] = 2;
-        boxIndices[0][3] = 3;
-        boxIndices[0][4] = 4;
-        boxIndices[0][5] = 5;
-        boxIndices[0][6] = 6;
-        boxIndices[0][7] = 7;
-        boxIndices[0][8] = 8;
-        boxIndices[1][0] = 9;
-        boxIndices[1][1] = 10;
-        boxIndices[1][2] = 11;
-        boxIndices[1][3] = 12;
-        boxIndices[1][4] = 13;
-        boxIndices[1][5] = 14;
-        boxIndices[1][6] = 15;
-        boxIndices[1][7] = 16;
-        boxIndices[1][8] = 17;
-        boxIndices[2][0] = 18;
-        boxIndices[2][1] = 19;
-        boxIndices[2][2] = 20;
-        boxIndices[2][3] = 21;
-        boxIndices[2][4] = 22;
-        boxIndices[2][5] = 23;
-        boxIndices[2][6] = 24;
-        boxIndices[2][7] = 25;
-        boxIndices[2][8] = 26;
-        boxIndices[3][0] = 27;
-        boxIndices[3][1] = 28;
-        boxIndices[3][2] = 29;
-        boxIndices[3][3] = 30;
-        boxIndices[3][4] = 31;
-        boxIndices[3][5] = 32;
-        boxIndices[3][6] = 33;
-        boxIndices[3][7] = 34;
-        boxIndices[3][8] = 35;
-        boxIndices[4][0] = 36;
-        boxIndices[4][1] = 37;
-        boxIndices[4][2] = 38;
-        boxIndices[4][3] = 39;
-        boxIndices[4][4] = 40;
-        boxIndices[4][5] = 41;
-        boxIndices[4][6] = 42;
-        boxIndices[4][7] = 43;
-        boxIndices[4][8] = 44;
-        boxIndices[5][0] = 45;
-        boxIndices[5][1] = 46;
-        boxIndices[5][2] = 47;
-        boxIndices[5][3] = 48;
-        boxIndices[5][4] = 49;
-        boxIndices[5][5] = 50;
-        boxIndices[5][6] = 51;
-        boxIndices[5][7] = 52;
-        boxIndices[5][8] = 53;
-        boxIndices[6][0] = 54;
-        boxIndices[6][1] = 55;
-        boxIndices[6][2] = 56;
-        boxIndices[6][3] = 57;
-        boxIndices[6][4] = 58;
-        boxIndices[6][5] = 59;
-        boxIndices[6][6] = 60;
-        boxIndices[6][7] = 61;
-        boxIndices[6][8] = 62;
-        boxIndices[7][0] = 63;
-        boxIndices[7][1] = 64;
-        boxIndices[7][2] = 65;
-        boxIndices[7][3] = 66;
-        boxIndices[7][4] = 67;
-        boxIndices[7][5] = 68;
-        boxIndices[7][6] = 69;
-        boxIndices[7][7] = 70;
-        boxIndices[7][8] = 71;
-        boxIndices[8][0] = 72;
-        boxIndices[8][1] = 73;
-        boxIndices[8][2] = 74;
-        boxIndices[8][3] = 75;
-        boxIndices[8][4] = 76;
-        boxIndices[8][5] = 77;
-        boxIndices[8][6] = 78;
-        boxIndices[8][7] = 79;
-        boxIndices[8][8] = 80;
-
-        colIndices = new int[9][9];
-        colIndices[0][0] = 0;
-        colIndices[0][1] = 3;
-        colIndices[0][2] = 6;
-        colIndices[0][3] = 27;
-        colIndices[0][4] = 30;
-        colIndices[0][5] = 33;
-        colIndices[0][6] = 54;
-        colIndices[0][7] = 57;
-        colIndices[0][8] = 60;
-        colIndices[1][0] = 1;
-        colIndices[1][1] = 4;
-        colIndices[1][2] = 7;
-        colIndices[1][3] = 28;
-        colIndices[1][4] = 31;
-        colIndices[1][5] = 34;
-        colIndices[1][6] = 55;
-        colIndices[1][7] = 58;
-        colIndices[1][8] = 61;
-        colIndices[2][0] = 2;
-        colIndices[2][1] = 5;
-        colIndices[2][2] = 8;
-        colIndices[2][3] = 29;
-        colIndices[2][4] = 32;
-        colIndices[2][5] = 35;
-        colIndices[2][6] = 56;
-        colIndices[2][7] = 59;
-        colIndices[2][8] = 62;
-        colIndices[3][0] = 9;
-        colIndices[3][1] = 12;
-        colIndices[3][2] = 15;
-        colIndices[3][3] = 36;
-        colIndices[3][4] = 39;
-        colIndices[3][5] = 42;
-        colIndices[3][6] = 63;
-        colIndices[3][7] = 66;
-        colIndices[3][8] = 69;
-        colIndices[4][0] = 10;
-        colIndices[4][1] = 13;
-        colIndices[4][2] = 16;
-        colIndices[4][3] = 37;
-        colIndices[4][4] = 40;
-        colIndices[4][5] = 43;
-        colIndices[4][6] = 64;
-        colIndices[4][7] = 67;
-        colIndices[4][8] = 70;
-        colIndices[5][0] = 11;
-        colIndices[5][1] = 14;
-        colIndices[5][2] = 17;
-        colIndices[5][3] = 38;
-        colIndices[5][4] = 41;
-        colIndices[5][5] = 44;
-        colIndices[5][6] = 65;
-        colIndices[5][7] = 68;
-        colIndices[5][8] = 71;
-        colIndices[6][0] = 18;
-        colIndices[6][1] = 21;
-        colIndices[6][2] = 24;
-        colIndices[6][3] = 45;
-        colIndices[6][4] = 48;
-        colIndices[6][5] = 51;
-        colIndices[6][6] = 72;
-        colIndices[6][7] = 75;
-        colIndices[6][8] = 78;
-        colIndices[7][0] = 19;
-        colIndices[7][1] = 22;
-        colIndices[7][2] = 25;
-        colIndices[7][3] = 46;
-        colIndices[7][4] = 49;
-        colIndices[7][5] = 52;
-        colIndices[7][6] = 73;
-        colIndices[7][7] = 76;
-        colIndices[7][8] = 79;
-        colIndices[8][0] = 20;
-        colIndices[8][1] = 23;
-        colIndices[8][2] = 26;
-        colIndices[8][3] = 47;
-        colIndices[8][4] = 50;
-        colIndices[8][5] = 53;
-        colIndices[8][6] = 74;
-        colIndices[8][7] = 77;
-        colIndices[8][8] = 80;
-
-        rowIndices = new int[9][9];
-        rowIndices[0][0] = 0;
-        rowIndices[0][1] = 1;
-        rowIndices[0][2] = 2;
-        rowIndices[0][3] = 9;
-        rowIndices[0][4] = 10;
-        rowIndices[0][5] = 11;
-        rowIndices[0][6] = 18;
-        rowIndices[0][7] = 19;
-        rowIndices[0][8] = 20;
-        rowIndices[1][0] = 3;
-        rowIndices[1][1] = 4;
-        rowIndices[1][2] = 5;
-        rowIndices[1][3] = 12;
-        rowIndices[1][4] = 13;
-        rowIndices[1][5] = 14;
-        rowIndices[1][6] = 21;
-        rowIndices[1][7] = 22;
-        rowIndices[1][8] = 23;
-        rowIndices[2][0] = 6;
-        rowIndices[2][1] = 7;
-        rowIndices[2][2] = 8;
-        rowIndices[2][3] = 15;
-        rowIndices[2][4] = 16;
-        rowIndices[2][5] = 17;
-        rowIndices[2][6] = 24;
-        rowIndices[2][7] = 25;
-        rowIndices[2][8] = 26;
-        rowIndices[3][0] = 27;
-        rowIndices[3][1] = 28;
-        rowIndices[3][2] = 29;
-        rowIndices[3][3] = 36;
-        rowIndices[3][4] = 37;
-        rowIndices[3][5] = 38;
-        rowIndices[3][6] = 45;
-        rowIndices[3][7] = 46;
-        rowIndices[3][8] = 47;
-        rowIndices[4][0] = 30;
-        rowIndices[4][1] = 31;
-        rowIndices[4][2] = 32;
-        rowIndices[4][3] = 39;
-        rowIndices[4][4] = 40;
-        rowIndices[4][5] = 41;
-        rowIndices[4][6] = 48;
-        rowIndices[4][7] = 49;
-        rowIndices[4][8] = 50;
-        rowIndices[5][0] = 33;
-        rowIndices[5][1] = 34;
-        rowIndices[5][2] = 35;
-        rowIndices[5][3] = 42;
-        rowIndices[5][4] = 43;
-        rowIndices[5][5] = 44;
-        rowIndices[5][6] = 51;
-        rowIndices[5][7] = 52;
-        rowIndices[5][8] = 53;
-        rowIndices[6][0] = 54;
-        rowIndices[6][1] = 55;
-        rowIndices[6][2] = 56;
-        rowIndices[6][3] = 63;
-        rowIndices[6][4] = 64;
-        rowIndices[6][5] = 65;
-        rowIndices[6][6] = 72;
-        rowIndices[6][7] = 73;
-        rowIndices[6][8] = 74;
-        rowIndices[7][0] = 57;
-        rowIndices[7][1] = 58;
-        rowIndices[7][2] = 59;
-        rowIndices[7][3] = 66;
-        rowIndices[7][4] = 67;
-        rowIndices[7][5] = 68;
-        rowIndices[7][6] = 75;
-        rowIndices[7][7] = 76;
-        rowIndices[7][8] = 77;
-        rowIndices[8][0] = 60;
-        rowIndices[8][1] = 61;
-        rowIndices[8][2] = 62;
-        rowIndices[8][3] = 69;
-        rowIndices[8][4] = 70;
-        rowIndices[8][5] = 71;
-        rowIndices[8][6] = 78;
-        rowIndices[8][7] = 79;
-        rowIndices[8][8] = 80;
-
-    } // end initializeIndices
-
-
     //-------------------------------------------------------------------
     // Method Name: isAreareducible
     //
@@ -1827,7 +1614,7 @@ public class Laffingas extends JPanel implements ActionListener {
         clear();
         intState = DEFINING;
         jbStart.setText("Start");
-        String theString = "";
+        String theString;
 
         int theValue;
         try {
@@ -2088,7 +1875,6 @@ public class Laffingas extends JPanel implements ActionListener {
 
 
     private void setAutomatic(boolean b) {
-
         if (!b) {
             blnAutoSolve = false;
             jbAuto.setText("Auto On");
@@ -2108,66 +1894,4 @@ public class Laffingas extends JPanel implements ActionListener {
         } // end if
     } // end setAutomatic
 
-    public void showMatrix() {
-
-    }
-
-    public static void main(String args[]) {
-        JMenu jmFile = new JMenu("File");
-        jmFile.add(new JMenuItem("Open"));
-        jmFile.add(new JMenuItem("Exit"));
-
-        JMenu jmView = new JMenu("View");
-        jmView.add(new JMenuItem("Remove Highlighting"));
-
-        JMenu jmHelp = new JMenu("Help");
-        jmHelp.add(new JMenuItem("Getting Started"));
-
-        JMenuBar jmb = new JMenuBar();
-        jmb.add(jmFile);
-        jmb.add(jmView);
-        jmb.add(Box.createHorizontalGlue());
-        jmb.add(jmHelp);
-
-        theMatrix = new Laffingas();
-        theFrame = new JFrame("Laffingas");
-        theFrame.setJMenuBar(jmb);
-
-        ActionListener al = new ActionListener() {
-            public void actionPerformed(ActionEvent ae) {
-                String what = ae.getActionCommand();
-                theMatrix.handleMenuBar(what);
-            } // end actionPerformed
-        };
-
-        //---------------------------------------------------------
-        // Add the above handler to all menu items.
-        //---------------------------------------------------------
-        int numMenus = jmb.getMenuCount();
-        // log.debug("Number of menus found: " + numMenus);
-        for (int i = 0; i < numMenus; i++) {
-            JMenu jm = jmb.getMenu(i);
-            if (jm == null) continue;
-
-            for (int j = 0; j < jm.getItemCount(); j++) {
-                JMenuItem jmi = jm.getItem(j);
-                if (jmi == null) continue; // Separator
-                jmi.addActionListener(al);
-            } // end for j
-        } // end for i
-        //---------------------------------------------------------
-
-        theFrame.addWindowListener(new java.awt.event.WindowAdapter() {
-            public void windowClosing(java.awt.event.WindowEvent we) {
-                System.exit(0);
-            }
-        });
-        theFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-        theFrame.setContentPane(theMatrix);
-        theFrame.pack();  // This sets the frame size to fit the solution matrix.
-        theFrame.setLocationRelativeTo(null);
-        theFrame.setContentPane(new InitialInfo(theMatrix));
-        theFrame.setVisible(true);
-
-    } // end of the main method
 } // end class

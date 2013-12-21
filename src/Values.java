@@ -2,7 +2,7 @@
  * Created with IntelliJ IDEA.
  * User: lee
  */
-public class Values {
+public interface Values {
     public static final int DEFINING = 88;
     public static final int SOLVING = 89;
     public static final int SOLVED = 90;
@@ -19,4 +19,6 @@ public class Values {
     public static final String lastButton = "Load the previous puzzle";
     public static final String loadButton = "Load a saved puzzle";
     public static final String helpButton = "View the Help documentation";
+
+    public static final String baseTitle = "ukodus";
 }

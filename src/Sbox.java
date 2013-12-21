@@ -8,7 +8,6 @@ import java.util.Vector;
 * User: lee
 */
 class Sbox extends JPanel {
-    public static final long serialVersionUID = 1L;
     private Vector<JLabel> squares = new Vector<JLabel>();
 
     public Sbox(MouseAdapter ma) {
