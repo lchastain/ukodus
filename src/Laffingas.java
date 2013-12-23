@@ -37,6 +37,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     private boolean blnAutoSolve;
     private boolean hadPendingReductions;  // Need to know if we ever did.
     private String definitionName;
+    private int autoDelay = 700;  // The default value.
 
     //------------------------------------------------------------------
     // These index assignments could also be done via calculations
@@ -268,6 +269,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             jbAuto.setVisible(false);
             jbReset.setVisible(false);
             jbSave.setVisible(true);
+            mi_view_1.setEnabled(true);
             theFrame.setContentPane(this);
         } // end if
 
@@ -286,6 +288,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     File file = fc.getSelectedFile();
                     String newName = file.getName();
 
+                    // Flag to indicate whether of not we should issue a warning to the
+                    // user, in the case that the 'Save' will overwrite an existing file.
                     boolean warnOverwrite = true;
 
                     // Are we re-saving the same file that we loaded?
@@ -296,24 +300,38 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                         }
                     }
 
+                    // This can become false, if there is an overwrite warning
+                    // and it convinces the user to stop what they are doing.
+                    boolean doTheSave = true;
+
+                    // The two cases where the user should see an overwrite warning:
+                    // 1.  No file was loaded; they just somehow chose a name that already
+                    //      exists (the UI actually makes this easy to do).
+                    // 2.  A file was loaded, but they are now saving with a different name
+                    //      and the name they have changed to is a pre-existing file.
+                    // Both these cases boil down to the fact that there is a pre-existing file,
+                    // and the 'warnOverwrite' flag is still true.
                     if(warnOverwrite && file.exists()) {
                         String message = "A file with the chosen name already exists " +
                                 "in this location." + System.lineSeparator() +
                                 "Are you sure you want to overwrite it?";
                         String title = "Save / Overwrite";
                         int reply = JOptionPane.showConfirmDialog(null, message, title, JOptionPane.YES_NO_OPTION);
-                        if (reply == JOptionPane.YES_OPTION)
-                        {
-                            System.out.println("Saving: " + file.getName() + ".");
-                            BufferedWriter out = new BufferedWriter(new FileWriter(file.getAbsolutePath()));
-                            out.write(stringifyMatrix());
-                            out.close();
-                            definitionName = newName;
-                            theFrame.setTitle(baseTitle + " - " + definitionName);
-                        } else {
+                        if (reply != JOptionPane.YES_OPTION) {
+                            doTheSave = false;
                             System.out.println("Save/overwrite operation cancelled by user.");
                         }
                     }
+
+                    if(doTheSave) {
+                        System.out.println("Saving: " + file.getName() + ".");
+                        BufferedWriter out = new BufferedWriter(new FileWriter(file.getAbsolutePath()));
+                        out.write(stringifyMatrix());
+                        out.close();
+                        definitionName = newName;
+                        theFrame.setTitle(baseTitle + " - " + definitionName);
+                    }
+
                 } else {
                     System.out.println("Save operation cancelled by user.");
                 }
@@ -339,6 +357,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         // The 'Define New' button, from the startup panel (almost same as above)
         if (e.getActionCommand().equals(defineButton)) {
+            mi_view_1.setEnabled(true);
             theFrame.setContentPane(this);
             intState = DEFINING;
             jbStart.setText("Start");
@@ -354,7 +373,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         // The 'Load a saved..' button, from the startup panel
         if (e.getActionCommand().equals(loadButton)) {
             handleMenuBar("Open...");
-            jbSave.setVisible(true);
         }
 
         if (e.getActionCommand().equals(helpButton)) {
@@ -503,17 +521,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end countFound
 
 
-    // Used in development to quickly skip the 'DEFINING' stage
-    public void define(int index, int val) {
-
-        JLabel jl;
-        jl = squares.elementAt(index);
-
-        jl.setText(String.valueOf(val));
-        jl.setToolTipText(String.valueOf(val));
-    } // end define
-
-
     //-------------------------------------------------------------------------
     // Method Name: findNext
     //
@@ -521,9 +528,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     public void findNext() {
         intLastFoundIndex = -1;
 
-        findSimple();
+        boolean b = findSimple();
 
         if (intLastFoundIndex >= 0) return;  //  We found one!
+        // But we don't return based on 'b' ...  threading concerns.
 
         // We only get to this point if we couldn't find a simple solution.
 
@@ -552,30 +560,31 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         //   already be off, by virtue of the fact that it goes off with
         //   every click of 'Next'.
 
-        boolean b;
+        // For testing, move a methodology test to the top (here), to ensure
+        // that some other method does not get there first.
 
-        b = findNakedPair(BOX);
+
+        if (!b) b = findNakedPair(BOX);
         if (!b) b = findNakedPair(COL);
         if (!b) b = findNakedPair(ROW);
 
-        if (!b) b = findX();
-        // could add a 'row' version
+        if (!b) b = findX();  // this one finds two rows, then eliminates other values in the columns.
+        // Add a version that finds two columns...
 
         if (!b) b = findHiddenPair(BOX);
         if (!b) b = findHiddenPair(COL);
         if (!b) b = findHiddenPair(ROW);
 
-        if (!b) b = findInsideBox(ROBOX);
-        if (!b) b = findInsideBox(COBOX);
-//    if(!b) b = findOutsideBox(BOXRO);
-//    if(!b) b = findOutsideBox(BOXCO);
+        if (!b) b = findInsideBox(ROW);
+        if (!b) b = findInsideBox(COL);
+//    if(!b) b = findOutsideBox(ROW);
+//    if(!b) b = findOutsideBox(COL);
 
         if (!b) {
+            setAutomatic(false);
             showMessage("Cannot find another square to reduce or resolve logically; " +
                     System.lineSeparator() +
                     "you can try again after entering one or more on your own.");
-            blnAutoSolve = false;
-            jbAuto.setText("Auto On");
         } // end if
     } // end findNext
 
@@ -1277,7 +1286,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //   also identify that one square and return true.  If the simple
     //   versions cannot find a solvable square, they return false.
     //-----------------------------------------------------------------------
-    private void findSimple() {
+    private boolean findSimple() {
         boolean b;
 
         // This is our first method of attack; if we have a 'hit' here then
@@ -1292,6 +1301,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if (intLastFoundIndex >= 0) {
             System.out.println("\t\t\tFound Count: " + countFound() + "\t\tLast Index: " + intLastFoundIndex);
         } // end if
+
+        return b;
     } // end findSimple
 
 
@@ -1304,14 +1315,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     public String getAreaTypeString(int intAreaType) {
         switch (intAreaType) {
             case BOX:
-            case BOXRO:
-            case BOXCO:
                 return "Box";
             case ROW:
-            case ROBOX:
                 return "Row";
             case COL:
-            case COBOX:
                 return "Column";
             default:
                 return "";
@@ -1389,19 +1396,27 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
     public void handleMenuBar(String what) {
         if (what.equals("Open...")) {
-            //Create a file chooser
+            // Create a file chooser
             final JFileChooser fc = new JFileChooser("data");
 
-            //In response to a button click:
+            // Turn off any auto-solution in progress
+            setAutomatic(false);
+
+            // A previous solution may have left these 'on'.
+            jbAuto.setVisible(false);
+            jbReset.setVisible(false);
+
             int returnVal = fc.showOpenDialog(theFrame);
 
             if (returnVal == JFileChooser.APPROVE_OPTION) {
+                mi_view_1.setEnabled(true);
                 theFrame.setContentPane(this);
                 File file = fc.getSelectedFile();
                 definitionName = file.getName();
                 System.out.println("Opening: " + definitionName + ".");
                 loadFile(file.getAbsolutePath());
                 theFrame.setTitle(baseTitle + " - " + definitionName);
+                jbSave.setVisible(true);
             } else {
                 System.out.println("The 'File/Open' action was cancelled by user.");
             }
@@ -1416,6 +1431,11 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end if
 
         if (what.equals("Restart")) {
+            setAutomatic(false); // Ensure there is no auto-solution in progress
+            mi_view_1.setEnabled(false);
+            mi_view_2.setEnabled(false);
+            autoDelay = 700;
+
             theFrame.setContentPane(new InitialInfo(this));
             theFrame.getContentPane().revalidate();
             theFrame.repaint();
@@ -1423,12 +1443,30 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end if
 
         if (what.equals("Documentation")) {
+            setAutomatic(false); // Ensure there is no auto-solution in progress
+            mi_view_1.setEnabled(false);
+            mi_view_2.setEnabled(false);
+
             try {
                 Runtime.getRuntime().exec("hh help" + File.separatorChar + "ukodus.chm");
             } catch(IOException ioe) {
                 System.out.println(ioe.getMessage());
             } // end try/catch
         } // end if
+
+        if (what.equals("Set Auto-solution delay...")) {
+            try {
+                int ans = Integer.parseInt( (String) JOptionPane.showInputDialog(
+                    theFrame, "Enter a value (in milliseconds) for the delay",
+                    what, JOptionPane.QUESTION_MESSAGE, null, null, autoDelay));
+                autoDelay = ans < 1 ? 1:ans;
+            } catch(NumberFormatException nfe) {
+                System.out.println(nfe.getMessage());
+                System.out.println("Value remains unchanged - " + autoDelay + "ms");
+            }
+        }
+
+        System.out.println("handleMenuBar " + what);
 
     } // end handleMenuBar
 
@@ -1491,7 +1529,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             new Thread(new Runnable() {
                 public void run() {
                     try {
-                        Thread.sleep(700);
+                        Thread.sleep(autoDelay); //Thread.sleep(700);
                     } catch (InterruptedException ie) {
                         System.out.println(ie.getMessage());
                     }
@@ -1512,6 +1550,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             jl.setBackground(theOriginalBackground);
             jl.setBorder(BorderFactory.createLineBorder(Color.black, 1));
         } // end for
+
+        mi_view_2.setEnabled(false);
     } // end highlightOff
 
 
@@ -1527,6 +1567,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             jl = squares.elementAt(theArray[intNum][i]);
             jl.setBackground(theHighlightBackground);
         } // end for
+
+        mi_view_2.setEnabled(true);
     } // end highlightOn
 
 
@@ -1622,10 +1664,16 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             theString = in.readLine();
             in.close();
 
-            if (theString.length() > 81) theString = theString.substring(0, 81);
-            for (int i = 0; i < theString.length(); i++) {
-                theValue = Integer.parseInt(theString.substring(i, i + 1));
-                if (theValue != 0) define(i, theValue);
+            if (theString.length() > 81) theString = theString.substring(0, 80);
+            for (int index = 0; index < theString.length(); index++) {
+                // Remember that the substring method uses endIndex-1; it will not
+                // throw an exception if the value is one more than the last valid index.
+                theValue = Integer.parseInt(theString.substring(index, index + 1));
+                if (theValue != 0) {
+                    JLabel jl = squares.elementAt(index);
+                    jl.setText(String.valueOf(theValue));
+                    jl.setToolTipText(String.valueOf(theValue));
+                }
             } // end for i
             //System.out.println(str);
         } catch (IOException ioe) {
@@ -1706,16 +1754,12 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     public void setTheArray(int intAreaType) {
         switch (intAreaType) {
             case BOX:
-            case BOXRO:
-            case BOXCO:
                 theArray = boxIndices;
                 break;
             case COL:
-            case COBOX:
                 theArray = colIndices;
                 break;
             case ROW:
-            case ROBOX:
                 theArray = rowIndices;
                 break;
             default:

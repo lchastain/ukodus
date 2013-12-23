@@ -9,8 +9,11 @@ public class Main implements Values {
         jmFile.add(new JMenuItem("Exit"));
 
         JMenu jmView = new JMenu("View");
-        jmView.add(new JMenuItem("Restart"));
-        jmView.add(new JMenuItem("Remove Highlighting"));
+        jmView.add(mi_view_1); // Menu Item - Restart
+        jmView.add(mi_view_2); // Menu Item - Remove Highlighting
+        jmView.add(new JMenuItem("Set Auto-solution delay..."));
+        mi_view_1.setEnabled(false);
+        mi_view_2.setEnabled(false);
 
         JMenu jmHelp = new JMenu("Help");
         jmHelp.add(new JMenuItem("Documentation"));
