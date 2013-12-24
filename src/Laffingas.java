@@ -27,12 +27,11 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     private JButton jbSave;    // After Start, this one should go away.
     private JButton jbReset;   // 'Reset' becomes visible after Start
     private JButton jbAuto;    // 'Auto On' becomes visible after Start
-    private int intLastFoundIndex;
     private int intNakedIndex1;
     private int intNakedIndex2;
     private int intNakedIndex3;
-    private int foundArray[];   // The indexes of each 'found' square (up to 80 of them)
     private String referenceArray[]; // The square texts after the last 'Next'.
+    private boolean pendingAssignment;
     private boolean pendingReductions;
     private boolean blnAutoSolve;
     private boolean hadPendingReductions;  // Need to know if we ever did.
@@ -76,8 +75,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         // Initializations
         intState = DEFINING;
-        intLastFoundIndex = -1;
-        foundArray = new int[80];
         referenceArray = new String[81];
         hadPendingReductions = false;
         blnAutoSolve = false;
@@ -257,10 +254,18 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         // Reset
         if (e.getSource() == jbReset) {
-            loadLast();
+            if(blnAutoSolve) {
+                setAutomatic(false);
+                try {
+                    Thread.sleep(autoDelay);
+                } catch (InterruptedException ie) {
+                    System.out.println(ie.getMessage());
+                }
+            }
             jbAuto.setVisible(false);
             jbReset.setVisible(false);
             jbSave.setVisible(true);
+            loadLast();
         } // end if
 
         // Load the previous.. (same as 'Reset')
@@ -383,7 +388,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             } // end try/catch
         }
 
-        System.out.println("Handled " + e.getActionCommand());
+        //System.out.println("Handled " + e.getActionCommand());
     } // end actionPerformed
 
 
@@ -408,7 +413,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         highlightOff();
         resetReductionVars();
         hadPendingReductions = false;
-        foundArray = new int[80];
         referenceArray = new String[81];
         for (JLabel jl : squares) {
             jl.setText(" ");
@@ -467,7 +471,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //   a first pass of one solution to the second pass of a different one, in
     //   the case where the user has made changes in between.  If a previously
     //   set value has now been cleared by the user, it will remove reductions
-    //   other than the intersects for ALL squares.
+    //   other than the intersects, for ALL squares.
     //----------------------------------------------------------------------------
     private void checkReferences() {
         boolean changeWasMade = false;
@@ -499,41 +503,31 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end checkReferences
 
 
-    // Return a count of the unique squares for which the app has found a value.
-    // If intLastFoundIndex is valid and not among them, add it.
-    public int countFound() {
-        int theCount = 0;
-        boolean alreadyThere = false;
-        for (int i = 0; i < 81; i++) {
-            if (foundArray[i] == 0) break;
-            theCount++;
-
-            if (foundArray[i] == intLastFoundIndex) alreadyThere = true;
-        } // end for i
-
-        if (intLastFoundIndex >= 0) {
-            if (!alreadyThere) {
-                foundArray[theCount] = intLastFoundIndex;
-                theCount++;
-            } // end if not already there
-        } // end if intLastFoundIndex has a valid value
-        return theCount;
-    } // end countFound
-
-
     //-------------------------------------------------------------------------
     // Method Name: findNext
     //
     //-------------------------------------------------------------------------
     public void findNext() {
-        intLastFoundIndex = -1;
+        //-----------------------------------------------------------------------
+        // This method calls the methods that can identify the one correct value
+        //   for a square, if possible.  Those methods will not only highlight
+        //   the relevant area in a method-specific color code, but they will
+        //   also identify that one square and return true.  If the simple
+        //   versions cannot find a solvable square, they return false.
+        //-----------------------------------------------------------------------
 
-        boolean b = findSimple();
 
-        if (intLastFoundIndex >= 0) return;  //  We found one!
-        // But we don't return based on 'b' ...  threading concerns.
+        // This is our first method of attack; if we have a 'hit' here then
+        //   it is the easiest solution for the user to see.
+        boolean b = findHighlander();
 
-        // We only get to this point if we couldn't find a simple solution.
+        // If that didn't work, we become Tonto -
+        if (!b) b = findLoneRanger(BOX);
+        if (!b) b = findLoneRanger(COL);
+        if (!b) b = findLoneRanger(ROW);
+
+
+        // We only get to this point if we couldn't find a simple assignment.
 
         // Non-simple solutions all involve the reduction of the remaining
         //   possibilities for the squares.  They do not identify the next
@@ -562,7 +556,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         // For testing, move a methodology test to the top (here), to ensure
         // that some other method does not get there first.
-
 
         if (!b) b = findNakedPair(BOX);
         if (!b) b = findNakedPair(COL);
@@ -764,18 +757,37 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //-----------------------------------------------------------------------
     public boolean findHighlander() {
         JLabel jl;
-        for (int i = 0; i < (9 * 9); i++) {
-            jl = squares.elementAt(i);
+        for (int index = 0; index < (9 * 9); index++) {
+            jl = squares.elementAt(index);
             if (!jl.getText().trim().equals("")) continue;
             if (jl.getToolTipText().trim().length() == 1) {
-                showIntersects(i); // highlight the row, col, box
-                jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
-                jl.setBackground(Color.white);
-                if (blnAutoSolve) {
+                // There is only one possibility.
+                int theRow = getPosition(ROW, index);
+                int theCol = getPosition(COL, index);
+                int theBox = getPosition(BOX, index);
+                String theChar = jl.getToolTipText().trim();
+                if (pendingAssignment) {
+                    setPendingAssignment(false);
                     jl.setForeground(Color.green.darker());
                     jl.setText(jl.getToolTipText().trim());
+                } else {
+                    String theMessage = "Highlander value: " + theChar;
+                    theMessage += " found in Row " + String.valueOf(theRow+1);
+                    theMessage += ", Col " + String.valueOf(theCol+1);
+                    theMessage += ", Box " + String.valueOf(theBox+1);
+                    System.out.println(theMessage);
+
+                    // Highlight the correct row, column, and box as intersects of this square
+                    theHighlightBackground = Color.green;
+                    highlightOn(ROW, theRow);
+                    highlightOn(COL, theCol);
+                    highlightOn(BOX, theBox);
+
+                    jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
+                    jl.setBackground(Color.white);
+                    setPendingAssignment(true);
                 } // end if
-                intLastFoundIndex = i;
+
                 return true;
             } // end if
         } // end for
@@ -954,16 +966,21 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 //System.out.println("Looking for " + theChar + "; found " + theCount);
 
                 if (theCount == 1) { // We found the LR!
-                    System.out.println("The Lone Ranger is: " + theChar);
-                    theHighlightBackground = Color.magenta;
-                    highlightOn(intAreaType, theArea);
-                    jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
-                    jl.setBackground(Color.white);
-                    if (blnAutoSolve) {
+                    if (pendingAssignment) {
                         jl.setForeground(Color.magenta.darker());
                         jl.setText(theChar);
+                        setPendingAssignment(false);
+                    } else {
+                        String theMessage = "Lone Ranger value: " + theChar;
+                        theMessage += " found in " + getAreaTypeString(intAreaType);
+                        theMessage += " " + String.valueOf(getPosition(intAreaType, i)+1);
+                        System.out.println(theMessage);
+                        theHighlightBackground = Color.magenta;
+                        highlightOn(intAreaType, theArea);
+                        jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
+                        jl.setBackground(Color.white);
+                        setPendingAssignment(true);
                     } // end if
-                    intLastFoundIndex = i;
                     return true;
                 } // end if
             } // end for j
@@ -1079,7 +1096,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
                             jl1.setBackground(Color.cyan.brighter());
                             jl2.setBackground(Color.cyan.brighter());
-                            return true;
                         } else { // There are pending reductions
                             stripNaked(i, str1);
 
@@ -1097,8 +1113,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                             } // end if BOX
 
                             resetReductionVars();
-                            return true;
                         } // end if
+                        return true;
                     } // end if we have a pair
                 } // end for k
             } // end for j (again)
@@ -1265,45 +1281,16 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     // Top Right
                     jl = squares.elementAt(colIndices[col2][row1]);
                     jl.setBackground(theHighlightBackground);
-
-                    return true;
                 } else { // There are pending reductions
                     stripX(row1, row2, col1, col2, theValue);
                     resetReductionVars();
-                    return true;
                 } // end if pendingReductions or not
+                return true;
             } // end for j - each value
         } // end for i - each row
 
         return false;
     } // end findX
-
-
-    //-----------------------------------------------------------------------
-    // This method calls the methods that can identify the one correct value
-    //   for a square, if possible.  Those methods will not only highlight
-    //   the relevant area in a method-specific color code, but they will
-    //   also identify that one square and return true.  If the simple
-    //   versions cannot find a solvable square, they return false.
-    //-----------------------------------------------------------------------
-    private boolean findSimple() {
-        boolean b;
-
-        // This is our first method of attack; if we have a 'hit' here then
-        //   it is the easiest solution for the user to see.
-        b = findHighlander();
-
-        // If that didn't work, we become Tonto -
-        if (!b) b = findLoneRanger(BOX);
-        if (!b) b = findLoneRanger(COL);
-        if (!b) findLoneRanger(ROW);
-
-        if (intLastFoundIndex >= 0) {
-            System.out.println("\t\t\tFound Count: " + countFound() + "\t\tLast Index: " + intLastFoundIndex);
-        } // end if
-
-        return b;
-    } // end findSimple
 
 
     //-----------------------------------------------------------------------
@@ -1426,7 +1413,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         if (what.equals("Remove Highlighting")) {
             highlightOff();
-            intLastFoundIndex = -1;
             resetReductionVars();
         } // end if
 
@@ -1499,20 +1485,9 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end if
 
         // Check the reference array to see if any values have changed.
-        // If so, cancel any in-progress two-pass methodology and reset
+        // If so, cancel any in-progress methodology and reset
         //   the reference array.
         checkReferences();
-
-        // Look to see if they pressed 'Next' without filling in the most
-        //   recently found square.  If so, then we interpret that action
-        //   to mean that they want to turn off the highlight and we've
-        //   already done that at this point so we'll just bail out now.
-        if (intLastFoundIndex != -1) { // If we previously found a solvable square
-            if (squares.elementAt(intLastFoundIndex).getText().trim().equals("")) {
-                intLastFoundIndex = -1;
-                return;
-            } // end if
-        } // end if
 
         // Reduce the remaining possible values for every square,
         //   based on intersects only.
@@ -1745,6 +1720,14 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     // The pendingReductions variable is not so tightly held that we
     //   need a 'set' and a 'get' for it.  This method is here because
     //   we may need to know (later) if it had ever been true.
+    private void setPendingAssignment(boolean b) {
+        pendingAssignment = b;
+    } // end setPendingAssignment
+
+
+    // The pendingReductions variable is not so tightly held that we
+    //   need a 'set' and a 'get' for it.  This method is here because
+    //   we may need to know (later) if it had ever been true.
     private void setPendingReductions(boolean b) {
         pendingReductions = b;
         if (b) hadPendingReductions = true;
@@ -1782,20 +1765,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         JOptionPane.showMessageDialog(theFrame, s, "Important Information",
                 JOptionPane.INFORMATION_MESSAGE);
     } // end showMessage
-
-
-    // Given a square identified by its index into the squares
-    // vector, highlight the correct row, column, and box.
-    public void showIntersects(int index) {
-        int theRow = getPosition(ROW, index);
-        int theCol = getPosition(COL, index);
-        int theBox = getPosition(BOX, index);
-
-        theHighlightBackground = Color.green;
-        highlightOn(ROW, theRow);
-        highlightOn(COL, theCol);
-        highlightOn(BOX, theBox);
-    } // end showIntersects
 
 
     //-------------------------------------------------------------------
@@ -1923,16 +1892,14 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             blnAutoSolve = false;
             jbAuto.setText("Auto On");
 
-            // Highlighting is off already anyway, but this method will
-            //   also clear controlling flags.
-            handleMenuBar("Remove Highlighting");
+            pendingAssignment = false;
+            pendingReductions = false;
+            // Since we were on auto before this, the sleep from that thread will expire,
+            // we will do one more 'findNext', and thanks to the above settings it will
+            // re-highlight the most recent method instead of going on one more step.
         } else {
             blnAutoSolve = true;
             jbAuto.setText("Auto Off");
-
-            // Highlighting is off already anyway, but this method will
-            //   also clear controlling flags.
-            handleMenuBar("Remove Highlighting");
 
             handleNextClick();
         } // end if
