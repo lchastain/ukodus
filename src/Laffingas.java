@@ -37,6 +37,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     private boolean hadPendingReductions;  // Need to know if we ever did.
     private String definitionName;
     private int autoDelay = 700;  // The default value.
+    private boolean debug = false;
 
     //------------------------------------------------------------------
     // These index assignments could also be done via calculations
@@ -547,7 +548,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
 
         // For development testing of a reduction methodology, move it to the top (here), to ensure
-        // that some other method does not change the conditions that can be found.
+        // that some other method does not change the conditions that we want to find.
 
         // Naked pair
         if (!b) b = findNakedPair(BOX);
@@ -560,8 +561,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if (!b) b = findHiddenPair(ROW);
 
         // X-wing
-        if (!b) b = findX();  // this one finds two rows, then eliminates other values in the columns.
-        // Add a version that finds two columns...
+        if (!b) b = findX(ROW);
+        if (!b) b = findX(COL);
 
         // Box interaction
         if (!b) b = findInsideBox(ROW);
@@ -718,7 +719,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                         if (pendingReductions) {
                             squares.elementAt(index1).setToolTipText(" " + strValue1 + strValue2);
                             squares.elementAt(index2).setToolTipText(" " + strValue1 + strValue2);
-                            resetReductionVars();
+                            pendingReductions = false;
                         } else {
                             System.out.print("Found a Hidden Pair for values ");
                             System.out.print(strValue1 + ", " + strValue2);
@@ -909,7 +910,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     //   possible.  Here, we detect that this has been done for
                     //   all squares in the Box, and return.
                     if (reductionsWereMade) {
-                        resetReductionVars();
+                        pendingReductions = false;
                         return true;
                     } // end if
 
@@ -1137,9 +1138,9 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     // 2.  An X was found for the first time - Area highlighted, returns true.
     // 3.  An X was found for the second time - Reductions made, returns true.
     //------------------------------------------------------------------------
-    public boolean findX() {
-        int row1, row2;
-        int col1, col2;
+    public boolean findX(int areaType) {
+        int area1, area2;
+        int alt1, alt2;
         String strValues;
         String aValue;
         int theIndex;
@@ -1148,26 +1149,51 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         int counterIndex;
         int theCounts[][] = new int[9][9];
 
+        String areaName = getAreaTypeString(areaType);
+
+        int altAreaType;
+        int altArray[][];
+        String altName;
+
+        debug = false;
+        String dMessage;
+
+        if(areaType == ROW) {
+            theArray = rowIndices;
+            altAreaType = COL;
+            altArray = colIndices;
+            altName = getAreaTypeString(COL);
+        }
+        else {
+            theArray = colIndices;
+            altAreaType = ROW;
+            altArray = rowIndices;
+            altName = getAreaTypeString(ROW);
+        }
+
+        if (theArray == null) return false;
+
         //--------------------------------------------------------------
-        // Scan the matrix and get a count of ALL possibilities in each row.
+        // Scan the matrix and get a count of ALL possibilities in each area.
         //   Place the results into 'theCounts[][]', where the
-        //   first dimension is the row, the second is the value
+        //   first dimension is the area, the second is the value
         //   that is being counted.
         //--------------------------------------------------------------
-        for (int i = 0; i < 9; i++) { // for each row
+        for (int i = 0; i < 9; i++) { // for each area
             strValues = "";
-            for (int j = 0; j < 9; j++) { // for each square on the row
-                theIndex = rowIndices[i][j];
+            for (int j = 0; j < 9; j++) { // for each square in the area
+                theIndex = theArray[i][j];
 
                 // If the square is not empty -
                 if (!squares.elementAt(theIndex).getText().trim().equals("")) continue;
 
-                // Get all the possible answers for the entire row
+                // Get all the possible answers for the entire area
                 strValues += squares.elementAt(theIndex).getToolTipText().trim();
             } // end for j
 
-            //System.out.print("The possibilities for all open squares on row ");
-            //System.out.println(String.valueOf(i+1) + " are " + strValues);
+            dMessage = "The possibilities for all open squares on " + areaName;
+            dMessage += " " + String.valueOf(i+1) + " are " + strValues;
+            loggit(dMessage);
 
             // Get a count for each possible value
             for (int k = 0; k < 9; k++) { // For each possible value
@@ -1183,61 +1209,67 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 } // end while
 
                 theCounts[i][k] = aCount;
-                //  System.out.print("In row " + String.valueOf(i+1));
+                //  System.out.print("In area " + String.valueOf(i+1));
                 //  System.out.println(" possible value " + aValue + " found " + aCount + " times");
             } // end for k
         } // end for i
         //--------------------------------------------------------------
 
-        // Now scan 'theCounts' for values of 2.  If we find two rows for
-        //   the same value, we have our rows.
-        for (int i = 0; i < 8; i++) {  // For each row (except the last)
+        // Now scan 'theCounts' for values of 2.  If we find two areas for
+        //   the same value, we have our areas.
+        for (int i = 0; i < 8; i++) {  // For each area (except the last)
             for (int j = 0; j < 9; j++) { // For each value
-                row1 = -1;
-                row2 = -1;
+                area1 = -1;
+                area2 = -1;
                 if (theCounts[i][j] != 2) continue;
 
                 // The count is 2; we need to look further...
-                for (int k = i + 1; k < 9; k++) { // For each subsequent row
+                for (int k = i + 1; k < 9; k++) { // For each subsequent area
                     if (theCounts[k][j] == 2) {
-                        row1 = i;
-                        row2 = k;
+                        area1 = i;
+                        area2 = k;
                     } // end if
                 } // end for
 
-                if (row2 == -1) continue; // We found a first row but not a second.
+                if (area2 == -1) continue; // We found a first area but not a second.
 
-                //System.out.println("Found a possible X on rows " + String.valueOf(row1+1) + ", " + String.valueOf(row2+1) + " for value " + String.valueOf(j+1));
+                loggit("Found a possible X on " + areaName +
+                        "s " + String.valueOf(area1+1) + ", " + String.valueOf(area2+1) + " for " +
+                        "value" + " " + String.valueOf(j+1));
 
                 // Now look to see that the values appear in the same columns.
-                col1 = -1;
-                col2 = -1;
+                alt1 = -1;
+                alt2 = -1;
 
-                // For row1 we can just set the columns; no checking required.
-                for (int k = 0; k < 9; k++) { // For each square in row1
-                    if (squares.elementAt(rowIndices[row1][k]).getToolTipText().contains(String.valueOf(j + 1))) {
-                        if (col1 == -1) {
-                            col1 = k;
-                            //System.out.print("  Col1: " + String.valueOf(k+1));
+                // For area1 we can just set the altAreas; no checking required.
+                for (int k = 0; k < 9; k++) { // For each square in area1
+                    if (squares.elementAt(theArray[area1][k]).getToolTipText().contains(String.valueOf(j + 1))) {
+                        if (alt1 == -1) {
+                            alt1 = k;
+                            //System.out.print("  First " + altName + ": " + String.valueOf(k+1));
                             continue;
                         } // end if
-                        if (col2 == -1) {
-                            col2 = k;
-                            //System.out.print("\tCol2: " + String.valueOf(k+1));
+                        if (alt2 == -1) {
+                            alt2 = k;
+                            //System.out.println ("\tSecond " + altName + ": " + String.valueOf(k+1));
                             break; // This is the 2nd on this row and there are only 2.
                         } // end if
                     } // end if the square possibilities contain the value
                 } // end for k - each square
 
-                // For row2 we need to check that the value appears in the same cols.
+                // For area2 we need to check that the value appears in the same altAreas.
                 //   If it does not, we keep looking.
-                if (!squares.elementAt(rowIndices[row2][col1]).getToolTipText().contains(String.valueOf(j + 1))) {
-                    //System.out.println("\tRow 2 Col 1 - NO match.");
+                if (!squares.elementAt(theArray[area2][alt1]).getToolTipText().contains(String.valueOf(j + 1))) {
+                    dMessage = "   but the value is not present at " + areaName +
+                            " " + (area2+1) + " " + altName + " " + (alt1+1);
+                    loggit(dMessage);
                     continue; // on to the next value
                 } // end if the square possibilities do not contain the value
 
-                if (!squares.elementAt(rowIndices[row2][col2]).getToolTipText().contains(String.valueOf(j + 1))) {
-                    //System.out.println("\tRow 2 Col 2 - NO match.");
+                if (!squares.elementAt(theArray[area2][alt2]).getToolTipText().contains(String.valueOf(j + 1))) {
+                    dMessage = "   but the value is not present at " + areaName +
+                            " " + (area2+1) + " " + altName + " " + (alt2+1);
+                    loggit(dMessage);
                     continue; // on to the next value
                 } // end if the square possibilities do not contain the value
 
@@ -1245,40 +1277,46 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
                 // But it does us no good if it is not reducible -
                 String theValue = String.valueOf(j + 1);
-                if (!isAreaXreducible(row1, row2, col1, col2, theValue)) continue;
+                if (!isAreaXreducible(areaType, area1, area2, alt1, alt2, theValue)) {
+                    //System.out.println("\t but not reducible; continuing on..");
+                    continue;
+                }
 
                 // So - if we're here, we have a reducible X
                 if (!pendingReductions) { // Highlight the X and return true
                     setPendingReductions(true);
                     // System.out.println("  Reducible: " + pendingXReductions);
                     System.out.print("Found an X for value [" + theValue + "] on ");
-                    System.out.print("Rows " + String.valueOf(row1 + 1) + ", " + String.valueOf(row2 + 1));
-                    System.out.println(" & Cols " + String.valueOf(col1 + 1) + ", " + String.valueOf(col2 + 1));
+                    System.out.print(areaName);
+                    System.out.print("s " +
+                            String.valueOf(area1 + 1) + ", " + String.valueOf(area2 + 1));
+                    System.out.print(" & " + altName);
+                    System.out.println("s " + String.valueOf(alt1 + 1) + ", " + String.valueOf(alt2 + 1));
 
                     JLabel jl;
 
                     theHighlightBackground = Color.yellow.darker();
-                    highlightOn(COL, col1);
-                    highlightOn(COL, col2);
+                    highlightOn(altAreaType, alt1);
+                    highlightOn(altAreaType, alt2);
 
                     theHighlightBackground = Color.yellow.brighter();
                     // Top Left
-                    jl = squares.elementAt(colIndices[col1][row1]);
+                    jl = squares.elementAt(altArray[alt1][area1]);
                     jl.setBackground(theHighlightBackground);
 
                     // Bottom Right
-                    jl = squares.elementAt(colIndices[col2][row2]);
+                    jl = squares.elementAt(altArray[alt2][area2]);
                     jl.setBackground(theHighlightBackground);
 
                     // Bottom Left
-                    jl = squares.elementAt(colIndices[col1][row2]);
+                    jl = squares.elementAt(altArray[alt1][area2]);
                     jl.setBackground(theHighlightBackground);
 
                     // Top Right
-                    jl = squares.elementAt(colIndices[col2][row1]);
+                    jl = squares.elementAt(altArray[alt2][area1]);
                     jl.setBackground(theHighlightBackground);
                 } else { // There are pending reductions
-                    stripX(row1, row2, col1, col2, theValue);
+                    stripX(areaType, area1, area2, alt1, alt2, theValue);
                     resetReductionVars();
                 } // end if pendingReductions or not
                 return true;
@@ -1581,26 +1619,37 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end isAreaNakedReducible
 
 
-    // Given an X as implied by the supplied rows, columns and value,
-    //   the return value will indicate if the value is anywhere
-    //   else in the two columns.
-    private boolean isAreaXreducible(int row1, int row2, int col1, int col2, String theVal) {
+    // Given an X as implied by the supplied areas, altAreas and value,
+    //   the returned boolean will indicate if the value is anywhere
+    //   else in the two alternate areas.  An area type is either a row or a column,
+    //   and an altArea type is also a row or column, but not the same as the area type.
+    private boolean isAreaXreducible(int areaType, int area1, int area2, int altArea1, int altArea2, String theVal) {
         String theValues;
 
-        for (int i = 0; i < 9; i++) { // Check Column 1
-            if (i == row1) continue;
-            if (i == row2) continue;
-            theValues = squares.elementAt(colIndices[col1][i]).getToolTipText().trim();
-            if (theValues.length() == 1) continue;
-            if (theValues.contains(theVal)) return true;
+        int [][] searchArray;
+        if(areaType == ROW) {
+            searchArray = colIndices;
+        }
+        else {
+            searchArray = rowIndices;
+        }
+
+        for (int i = 0; i < 9; i++) { // Check altArea1
+            if (i == area1) continue; // The square at [altArea1][area1] is already known to contain theVal
+            if (i == area2) continue; // The square at [altArea1][area2] is already known to contain theVal
+            theValues = squares.elementAt(searchArray[altArea1][i]).getToolTipText().trim();
+            if (theValues.contains(theVal)) {
+                return true;
+            }
         } // end for
 
-        for (int i = 0; i < 9; i++) { // Check Column 2
-            if (i == row1) continue;
-            if (i == row2) continue;
-            theValues = squares.elementAt(colIndices[col2][i]).getToolTipText().trim();
-            if (theValues.length() == 1) continue;
-            if (theValues.contains(theVal)) return true;
+        for (int i = 0; i < 9; i++) { // Check altArea2
+            if (i == area1) continue;
+            if (i == area2) continue;
+            theValues = squares.elementAt(searchArray[altArea2][i]).getToolTipText().trim();
+            if (theValues.contains(theVal)) {
+                return true;
+            }
         } // end for
 
         return false;
@@ -1807,7 +1856,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
     // Given an X as implied by the supplied rows, columns and value,
     //   remove other instances of the value from the columns.
-    private void stripX(int row1, int row2, int col1, int col2, String theVal) {
+    private void stripX(int areaType, int row1, int row2, int col1, int col2, String theVal) {
         String theValues;
         int theIndex;
 
@@ -1815,29 +1864,36 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         //System.out.print(row1 + ", " + row2);
         //System.out.println(" & cols: " + col1 + ", " + col2);
 
+        int [][] searchArray;
+        if(areaType == ROW) {
+            searchArray = colIndices;
+        } else {
+            searchArray = rowIndices;
+        }
+
         for (int i = 0; i < 9; i++) { // Check Column 1
             if (i == row1) continue;
             if (i == row2) continue;
-            theValues = squares.elementAt(colIndices[col1][i]).getToolTipText().trim();
+            theValues = squares.elementAt(searchArray[col1][i]).getToolTipText().trim();
             if (theValues.length() == 1) continue;
 
             if (theValues.contains(theVal)) {
                 theIndex = theValues.indexOf(theVal);
                 theValues = theValues.substring(0, theIndex) + theValues.substring(theIndex + 1);
-                squares.elementAt(colIndices[col1][i]).setToolTipText(" " + theValues);
+                squares.elementAt(searchArray[col1][i]).setToolTipText(" " + theValues);
             } // end if
         } // end for
 
         for (int i = 0; i < 9; i++) { // Check Column 2
             if (i == row1) continue;
             if (i == row2) continue;
-            theValues = squares.elementAt(colIndices[col2][i]).getToolTipText().trim();
+            theValues = squares.elementAt(searchArray[col2][i]).getToolTipText().trim();
             if (theValues.length() == 1) continue;
 
             if (theValues.contains(theVal)) {
                 theIndex = theValues.indexOf(theVal);
                 theValues = theValues.substring(0, theIndex) + theValues.substring(theIndex + 1);
-                squares.elementAt(colIndices[col2][i]).setToolTipText(" " + theValues);
+                squares.elementAt(searchArray[col2][i]).setToolTipText(" " + theValues);
             } // end if
         } // end for
     } // end stripX
@@ -1900,5 +1956,11 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             handleNextClick();
         } // end if
     } // end setAutomatic
+
+    // A way of sending output to the screen, that can easily be 'silenced'
+    // with a change to a global boolean flag.
+    private void loggit(String message) {
+        if (debug) System.out.println(message);
+    }
 
 } // end class
