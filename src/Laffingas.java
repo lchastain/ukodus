@@ -509,13 +509,26 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //-------------------------------------------------------------------------
     public void findNext() {
         //-----------------------------------------------------------------------
-        // This method calls the methods that can identify the one correct value
-        //   for a square, if possible.  Those methods will not only highlight
-        //   the relevant area in a method-specific color code, but they will
-        //   also identify that one square and return true.  If the simple
-        //   versions cannot find a solvable square, they return false.
-        //-----------------------------------------------------------------------
+        // This method calls all other methods that can identify the next square
+        //   of interest.  The 'find' methods all work in a two-pass fashion.
 
+        // In the first pass, if the objective is found then controlling flags are set
+        // such that the second pass will occur rather than going on to the next
+        // 'find' method.  Then it will highlight the solution area and set the
+        // content for the 'Explain' menu item.  Control then returns from this method
+        // back to the user so they can examine (and potentially act on) the results.
+        //
+        // The second pass does not come until 'Next' is clicked again, but if in the
+        // meanwhile the user
+        // has explicitly turned off the highlight or has made a change to a square,
+        // the second pass is cancelled, all intersects are recalculated and tool tips
+        // updated, and 'Next' will
+        // function as though it is conducting an entirely new search.
+
+        // The second pass will find the same area that the first pass highlighted and
+        // will make the assignment or reduction(s) and return control to the user.
+        // Highlighting will already be off by virtue of the fact that it goes off with
+        //   every click of 'Next'.
 
         // This is our first method of attack; if we have a 'hit' here then
         //   it is the easiest solution for the user to see.
@@ -526,59 +539,42 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if (!b) b = findLoneRanger(COL);
         if (!b) b = findLoneRanger(ROW);
 
-
-        // We only get to this point if we couldn't find a simple assignment.
-
-        // Non-simple solutions all involve the reduction of the remaining
+        // The two methods above can result in a simple assignment.
+        // All other methods below involve the reduction of the remaining
         //   possibilities for the squares.  They do not identify the next
         //   solution square, but may make it possible to do so, after the
         //   next resweep.
 
-        // The non-simple solutions all work in a two-pass fashion, if they
-        //   'find' anything.
-        //
-        // The first pass will highlight the solution area and may pop up an
-        //   explanatory dialog.  Control returns from this method back to
-        //   the user, who may mouse over the squares to see remaining
-        //   possibilities, or make changes with mouse clicks.  The second
-        //   pass does not come until the user clicks 'Next' again.  If the
-        //   user explicitly turns off the highlight or makes a change to a
-        //   square before clicking on 'Next', the second pass is cancelled
-        //   and 'Next' will function as though it is conducting an entirely
-        //   new search, after making updates to remaining possibilities due
-        //   to the changes that were made.
-        //
-        // The second pass will find the
-        //   same area that the first pass highlighted and will make the
-        //   reductions and return control to the user.  Highlighting will
-        //   already be off, by virtue of the fact that it goes off with
-        //   every click of 'Next'.
 
-        // For testing, move a methodology test to the top (here), to ensure
-        // that some other method does not get there first.
+        // For development testing of a reduction methodology, move it to the top (here), to ensure
+        // that some other method does not change the conditions that can be found.
 
+        // Naked pair
         if (!b) b = findNakedPair(BOX);
         if (!b) b = findNakedPair(COL);
         if (!b) b = findNakedPair(ROW);
 
-        if (!b) b = findX();  // this one finds two rows, then eliminates other values in the columns.
-        // Add a version that finds two columns...
-
+        // Hidden pair
         if (!b) b = findHiddenPair(BOX);
         if (!b) b = findHiddenPair(COL);
         if (!b) b = findHiddenPair(ROW);
 
+        // X-wing
+        if (!b) b = findX();  // this one finds two rows, then eliminates other values in the columns.
+        // Add a version that finds two columns...
+
+        // Box interaction
         if (!b) b = findInsideBox(ROW);
         if (!b) b = findInsideBox(COL);
 //    if(!b) b = findOutsideBox(ROW);
 //    if(!b) b = findOutsideBox(COL);
 
         if (!b) {
-            setAutomatic(false);
-            showMessage("Cannot find another square to reduce or resolve logically; " +
+            showMessage("Cannot find another square to assign or reduce logically; " +
                     System.lineSeparator() +
                     "you can try again after entering one or more on your own.");
-        } // end if
+            setAutomatic(false);
+       } // end if
     } // end findNext
 
 
