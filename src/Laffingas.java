@@ -467,18 +467,38 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //----------------------------------------------------------------------------
     // Method Name: checkReferences
     //
-    // This method compares the current values with the ones that were present
-    //   after the user last clicked 'Next'.  It will prevent 'crossover' from
-    //   a first pass of one solution to the second pass of a different one, in
-    //   the case where the user has made changes in between.  If a previously
-    //   set value has now been cleared by the user, it will remove reductions
-    //   other than the intersects, for ALL squares.
+    // This method compares the current values (just the values, not the
+    //   possibilities) in the matrix with the ones that were present during
+    //   the previous pass.  The very first time we come here, we will fill
+    //   our empty referenceArray with the initial puzzle values.  On
+    //   subsequent visits, the array is updated to capture any/all changes.
+    //
+    // On those subsequent visits, if any change at all (to a value in the
+    //   matrix) has been made (by either the user or the program), any pending
+    //   reduction is cleared.  This will prevent 'crossover' from a first pass
+    //   of one reduction method to the second pass of a different one.
+    //
+    // Then, if it turns out that something has changed and it includes a
+    //   previously set value having now been cleared by the user, it will
+    //   remove all reductions other than the intersects, for ALL squares.
+    //   This is because one or more of those reductions may have been made due
+    //   to the now-missing value.  But that alone may not fix things, if the
+    //   cleared square gets a different value when it eventually comes back,
+    //   because while it was present it may have led to an incorrect value
+    //   assignment in another square, and we are not clearing values at this
+    //   point; only possibilities.  We can recognize that this may have
+    //   occurred and warn the user about it (including suggestions on what
+    //   they can do to fix it) but no further programmatic action is taken and
+    //   so the overall solution may go off the rails.
     //----------------------------------------------------------------------------
     private void checkReferences() {
         boolean changeWasMade = false;
         String strCurrentVal;
         JLabel jl;
-        String sweepRepeatMessage = null;
+
+        // A non-null value here is relevant even if the message is never shown.
+        // Review the code at the end of this method, if you don't believe me.
+        String clearedValMsg = null;
 
         for (int i = 0; i < 81; i++) {
             jl = squares.elementAt(i);
@@ -486,21 +506,33 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             if (!strCurrentVal.equals(referenceArray[i])) {
                 referenceArray[i] = strCurrentVal;
                 changeWasMade = true;
-                if (strCurrentVal.equals(" ")) {
-                    if (sweepRepeatMessage == null) {
-                        sweepRepeatMessage = "One or more previously set squares has been cleared.  This requires a reset to";
-                        sweepRepeatMessage += "\n the available possibilities for every open square in the matrix.  Consequently,";
-                        sweepRepeatMessage += "\n you may see a repeat of one or more of the reduction methodologies.";
+                // The 'null' test below allows us to continue updating reference values while
+                // only showing the complaint one time.  We should allow the loop to fully
+                // execute and not bail out early as soon as we see that the user has messed
+                // with the values, because we need to continue updating ALL references even
+                // if the puzzle is now hosed (it may not be, or it may be fixable, but after
+                // every time this method is called, the referenceArray should be correct/complete).
+                if (clearedValMsg == null) {
+                    if (strCurrentVal.equals(" ")) {  // It previously held a value; now, does not.
+                        clearedValMsg = "One or more previously set squares has been cleared, so";
+                        clearedValMsg += "\n the decisions that led up to this point may be heading";
+                        clearedValMsg += "\n to the wrong overall solution.  You can ignore this and";
+                        clearedValMsg += "\n continue by clicking on 'Next', or to fix it you can either";
+                        clearedValMsg += "\n restore the values or start over by clicking on 'Reset'";
                         if (hadPendingReductions) {
-                            showMessage(sweepRepeatMessage);
+                            // We only need to issue this warning in the case that there have
+                            // ever been any reduction methodologies used to this point in the
+                            // solution; otherwise the sweep method will restore possibilities
+                            // that were removed due to assignments that are no longer present.
+                            showMessage(clearedValMsg);
                         } // end if
-                    } // end if the message has not yet been shown
-                } // end if a square was un-set
+                    } // end if a square was un-set
+                } // end if the message text had not yet been set
             } // end if
         } // end for i - each square
 
         if (changeWasMade) resetReductionVars();
-        if (sweepRepeatMessage != null) sweep();
+        if (clearedValMsg != null) sweep();
     } // end checkReferences
 
 
@@ -1657,17 +1689,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
 
     //--------------------------------------------------------------------------
-    // Method Name: loadLast
-    //
-    // Loads in the last matrix that was evaluated, if it was possible
-    //   to save it upon definition and if it is still there.
-    //--------------------------------------------------------------------------
-    public void loadLast() {
-        loadFile("last.txt");
-    } // end loadLast
-
-
-    //--------------------------------------------------------------------------
     // Method Name: loadFile
     //
     // Loads in the specified file.  Full file/path should be provided.
@@ -1704,15 +1725,26 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end loadFile
 
 
+    //--------------------------------------------------------------------------
+    // Method Name: loadLast
+    //
+    // Loads in the last matrix that was evaluated, if it was possible
+    //   to save it upon definition and if it is still there.
+    //--------------------------------------------------------------------------
+    public void loadLast() {
+        loadFile("last.txt");
+    } // end loadLast
+
+
     // These settings need to be done in multiple places
     private void resetReductionVars() {
         pendingReductions = false;
+        pendingAssignment = false;
 
         intNakedIndex1 = -1;
         intNakedIndex2 = -1;
         intNakedIndex3 = -1;
-
-    } // end resetStateVars
+    } // end resetReductionVars
 
 
     // Resweep the vector and update the tool tip text for every square

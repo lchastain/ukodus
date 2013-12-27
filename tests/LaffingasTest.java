@@ -1,4 +1,5 @@
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,7 +41,7 @@ public class LaffingasTest {
 
     @Test
     public void testFindX() throws Exception {
-
+      Assert.assertTrue(5 > (2+1));
     }
 
     @Test
