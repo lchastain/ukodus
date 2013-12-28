@@ -5,6 +5,8 @@ import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Properties;
 import java.util.Vector;
 import javax.swing.*;
 
@@ -36,13 +38,16 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     private boolean blnAutoSolve;
     private boolean hadPendingReductions;  // Need to know if we ever did.
     private String definitionName;
-    private int autoDelay = 700;  // The default value.
+    private int autoDelay;
+    private ArrayList<Integer> methodOrder;
     private boolean debug = false;
+    private Properties config = new Properties();
+    private int activeMethod;
 
     //------------------------------------------------------------------
     // These index assignments could also be done via calculations
     //   but this 'brute force' method is more readable / understandable.
-    //   The values were obtained by printing out a 9x9 matrix of squareFs
+    //   The values were obtained by printing out a 9x9 matrix of squares
     //   and then filling in the index values (top left = 0) in the same
     //   order that they are created in the constructor.  Since that
     //   sequence is by Boxes rather than rows or columns, the first
@@ -74,58 +79,25 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         Laffingas.theFrame = theFrame;
 
+        // Load the config file
+        try {
+            config.load(new FileInputStream("config.properties"));
+            setOptionsFromConfig();
+        } catch (IOException ex) {
+            System.out.println("Problem loading config file: " + ex.getMessage());
+            System.out.println("Resetting all values to default");
+            setConfigDefaults();
+            //System.out.println(methodChoices);
+        }
+
         // Initializations
         intState = DEFINING;
         referenceArray = new String[81];
         hadPendingReductions = false;
         blnAutoSolve = false;
-        resetReductionVars();  // In this case, it is a 'set', not 'reset'.
-
-        MouseAdapter ma = new MouseAdapter() {
-            public void mousePressed(MouseEvent e) {
-
-                String theValues = " 123456789";
-                JLabel jl = (JLabel) e.getSource();
-                String startText = jl.getText();
-                String ttText;
-                int adjust = 1;
-
-                ttText = jl.getToolTipText(); // Note - no trim here.
-                if (ttText != null) {
-                    if (ttText.length() == 1) return; // Original definition, or solution.
-                    // User-defined answers will have length 2 since a blank is
-                    //   another possibility, to allow them to un-set the value.
-                } // end if
-
-                // Look for right mouse press.
-                int m = e.getModifiers();
-                if ((m & InputEvent.BUTTON3_MASK) != 0) adjust = -1;
-
-                if (intState == DEFINING) {
-                    int index = theValues.indexOf(startText);
-                    index += adjust;
-                    if (index > 9) index = 0;
-                    if (index < 0) index = 9;
-                    jl.setText(theValues.substring(index, index + 1));
-                } // end if
-
-                if (intState == SOLVING) {
-                    theValues = jl.getToolTipText();
-                    int theMax = theValues.length() - 1;
-                    int index = theValues.indexOf(startText);
-                    index += adjust;
-                    if (index > theMax) index = 0;
-                    if (index < 0) index = theMax;
-                    jl.setText(theValues.substring(index, index + 1));
-                    jl.setForeground(Color.blue);
-                } // end if
-            } // end mousePressed
-        };
-
+        MouseAdapter ma = makeMouseAdapter();
         JPanel centerPanel = new JPanel(new GridLayout(3, 3, 0, 0));
         JPanel southPanel = new JPanel(new FlowLayout());
-
-        // Initialize the vector of squares
         squares = new Vector<JLabel>();
 
         // Fill the 3x3 grid with 9 Sbox
@@ -164,7 +136,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         add(centerPanel, "Center");
         add(southPanel, "South");
     } // end constructor
-
 
     // Handles ALL button clicks - from the South panel as well as the startup view.
     public void actionPerformed(ActionEvent e) {
@@ -253,11 +224,11 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         // Next
         if (e.getActionCommand().equals("Next")) handleNextClick();
 
-        // Reset
+        // Reset (back to puzzle definition, just before 'Start')
         if (e.getSource() == jbReset) {
             if(blnAutoSolve) {
                 setAutomatic(false);
-                try {
+                try { // Give the one that is in progress time to end gracefully.
                     Thread.sleep(autoDelay);
                 } catch (InterruptedException ie) {
                     System.out.println(ie.getMessage());
@@ -356,9 +327,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             jbReset.setVisible(false);
             jbSave.setVisible(true);
             clear();
-            for (JLabel jl : squares) {
-                jl.setToolTipText(null);
-            }
         } // end if
 
         // The 'Define New' button, from the startup panel (almost same as above)
@@ -371,9 +339,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             jbReset.setVisible(false);
             jbSave.setVisible(true);
             clear();
-            for (JLabel jl : squares) {
-                jl.setToolTipText(null);
-            }
         }
 
         // The 'Load a saved..' button, from the startup panel
@@ -408,15 +373,44 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end for
 
         return returnString;
-    }
+    } // end stringifyMatrix
+
+    //====================================================
+    // callMethod
+    //
+    // Calls a 'find' method based on an input integer
+    // value that matches its order in the Values string
+    // array: methodChoices.
+    //====================================================
+    public boolean callMethod(int theMethod) {
+        switch (theMethod) {
+            case 0: return findHighlander();
+            case 1: return findLoneRanger(BOX);
+            case 2: return findLoneRanger(COL);
+            case 3: return findLoneRanger(ROW);
+            case 4: return findNakedPair(BOX);
+            case 5: return findNakedPair(COL);
+            case 6: return findNakedPair(ROW);
+            case 7: return findHiddenPair(BOX);
+            case 8: return findHiddenPair(COL);
+            case 9: return findHiddenPair(ROW);
+            case 10: return findX(COL);
+            case 11: return findX(ROW);
+            case 12: return findInsideBox(COL);
+            case 13: return findInsideBox(ROW);
+            //case 14: return findOutsideBox(COL);
+            //case 15: return findOutsideBox(ROW);
+            default: return false;
+        }
+    } // end callActiveMethod
 
     public void clear() {
-        highlightOff();
-        resetReductionVars();
+        resetActiveMethod();
         hadPendingReductions = false;
         referenceArray = new String[81];
         for (JLabel jl : squares) {
             jl.setText(" ");
+            jl.setToolTipText(null);
             jl.setForeground(Color.black);
         } // end for
     } // end clear
@@ -531,83 +525,60 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             } // end if
         } // end for i - each square
 
-        if (changeWasMade) resetReductionVars();
+        if (changeWasMade) resetActiveMethod();
         if (clearedValMsg != null) sweep();
     } // end checkReferences
 
-
     //-------------------------------------------------------------------------
     // Method Name: findNext
+    //-------------------------------------------------------------------------
+    // This method calls all other methods that can identify the next square
+    //   of interest.  The 'find' methods all work in a two-pass fashion.
     //
+    // In the first pass, if the objective is found then controlling flags are set
+    // such that the second pass will occur rather than going on to the next
+    // 'find' method.  Then it will highlight the solution area and set the
+    // content for the 'Explanation' menu item.  Control then returns from this method
+    // back to the user so they can examine (and potentially act on) the results.
+    //
+    // The second pass does not come until 'Next' is clicked again, but if in the
+    // meanwhile the user has explicitly turned off the highlight or has made their
+    // own change to a square, the second pass is cancelled, all intersects are
+    // recalculated and tool tips updated, and 'Next' will function as though it is
+    // conducting an entirely new search.
+    //
+    // The second pass will use the 'activeMethod' variable to get directly back to
+    // the same method that was found during the first pass.  On this second pass
+    // the method will make the assignment or reduction(s) and return control to the
+    // user.  Highlighting will already be off by virtue of the fact that it goes
+    // off with every click of 'Next'.
+    //
+    // In the default 'methodOrder', the first two methods can result in a simple
+    // assignment.  All other methods involve the reduction of the remaining
+    // possibilities for the squares.  They do not identify the next
+    // solution square, but may make it possible to do so, after the
+    // next resweep.
     //-------------------------------------------------------------------------
     public void findNext() {
-        //-----------------------------------------------------------------------
-        // This method calls all other methods that can identify the next square
-        //   of interest.  The 'find' methods all work in a two-pass fashion.
+        boolean b = false;
 
-        // In the first pass, if the objective is found then controlling flags are set
-        // such that the second pass will occur rather than going on to the next
-        // 'find' method.  Then it will highlight the solution area and set the
-        // content for the 'Explain' menu item.  Control then returns from this method
-        // back to the user so they can examine (and potentially act on) the results.
-        //
-        // The second pass does not come until 'Next' is clicked again, but if in the
-        // meanwhile the user
-        // has explicitly turned off the highlight or has made a change to a square,
-        // the second pass is cancelled, all intersects are recalculated and tool tips
-        // updated, and 'Next' will
-        // function as though it is conducting an entirely new search.
-
-        // The second pass will find the same area that the first pass highlighted and
-        // will make the assignment or reduction(s) and return control to the user.
-        // Highlighting will already be off by virtue of the fact that it goes off with
-        //   every click of 'Next'.
-
-        // This is our first method of attack; if we have a 'hit' here then
-        //   it is the easiest solution for the user to see.
-        boolean b = findHighlander();
-
-        // If that didn't work, we become Tonto -
-        if (!b) b = findLoneRanger(BOX);
-        if (!b) b = findLoneRanger(COL);
-        if (!b) b = findLoneRanger(ROW);
-
-        // The two methods above can result in a simple assignment.
-        // All other methods below involve the reduction of the remaining
-        //   possibilities for the squares.  They do not identify the next
-        //   solution square, but may make it possible to do so, after the
-        //   next resweep.
-
-
-        // For development testing of a reduction methodology, move it to the top (here), to ensure
-        // that some other method does not change the conditions that we want to find.
-
-        // Naked pair
-        if (!b) b = findNakedPair(BOX);
-        if (!b) b = findNakedPair(COL);
-        if (!b) b = findNakedPair(ROW);
-
-        // Hidden pair
-        if (!b) b = findHiddenPair(BOX);
-        if (!b) b = findHiddenPair(COL);
-        if (!b) b = findHiddenPair(ROW);
-
-        // X-wing
-        if (!b) b = findX(ROW);
-        if (!b) b = findX(COL);
-
-        // Box interaction
-        if (!b) b = findInsideBox(ROW);
-        if (!b) b = findInsideBox(COL);
-//    if(!b) b = findOutsideBox(ROW);
-//    if(!b) b = findOutsideBox(COL);
+        if (activeMethod != -1) b = callMethod(activeMethod);
+        else {
+            for (int method : methodOrder) {
+                b = callMethod(method);
+                if (b) {
+                    activeMethod = method;
+                    break;
+                }
+            }
+        }
 
         if (!b) {
             showMessage("Cannot find another square to assign or reduce logically; " +
                     System.lineSeparator() +
                     "you can try again after entering one or more on your own.");
-            setAutomatic(false);
-       } // end if
+            setAutomatic(false); // (whether it was or not, it shouldn't be, now)
+        } // end if
     } // end findNext
 
 
@@ -751,7 +722,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                         if (pendingReductions) {
                             squares.elementAt(index1).setToolTipText(" " + strValue1 + strValue2);
                             squares.elementAt(index2).setToolTipText(" " + strValue1 + strValue2);
-                            pendingReductions = false;
+                            resetActiveMethod();
                         } else {
                             System.out.print("Found a Hidden Pair for values ");
                             System.out.print(strValue1 + ", " + strValue2);
@@ -783,6 +754,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //
     // Looks for a square where there is only one possible unused value
     //   remaining, based on the intersection of all other values showing.
+    //   This the easiest solution for the user to see on their own.
     //-----------------------------------------------------------------------
     public boolean findHighlander() {
         JLabel jl;
@@ -796,9 +768,9 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 int theBox = getPosition(BOX, index);
                 String theChar = jl.getToolTipText().trim();
                 if (pendingAssignment) {
-                    setPendingAssignment(false);
                     jl.setForeground(Color.green.darker());
                     jl.setText(jl.getToolTipText().trim());
+                    resetActiveMethod();
                 } else {
                     String theMessage = "Highlander value: " + theChar;
                     theMessage += " found in Row " + String.valueOf(theRow+1);
@@ -814,7 +786,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
                     jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
                     jl.setBackground(Color.white);
-                    setPendingAssignment(true);
+                    pendingAssignment = true;
                 } // end if
 
                 return true;
@@ -853,13 +825,6 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     if (!jl.getText().trim().equals("")) continue;
 
                     theValues = jl.getToolTipText().trim();
-
-                    // This should not happen because we are not supposed to be here
-                    //   if the square can be solved or the puzzle is incorrect.
-                    if (theValues.length() < 2) continue;
-
-                    // But now, we can be certain that there are 2 or more possible
-                    //   values for the square, and they can be examined.
 
                     // Does this square contain the value we're looking for?
                     if (theValues.contains(String.valueOf(j))) {
@@ -943,6 +908,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     //   all squares in the Box, and return.
                     if (reductionsWereMade) {
                         pendingReductions = false;
+                        resetActiveMethod();
                         return true;
                     } // end if
 
@@ -998,7 +964,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     if (pendingAssignment) {
                         jl.setForeground(Color.magenta.darker());
                         jl.setText(theChar);
-                        setPendingAssignment(false);
+                        resetActiveMethod();
                     } else {
                         String theMessage = "Lone Ranger value: " + theChar;
                         theMessage += " found in " + getAreaTypeString(intAreaType);
@@ -1008,7 +974,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                         highlightOn(intAreaType, theArea);
                         jl.setBorder(BorderFactory.createLineBorder(Color.red, 2));
                         jl.setBackground(Color.white);
-                        setPendingAssignment(true);
+                        pendingAssignment = true;
                     } // end if
                     return true;
                 } // end if
@@ -1141,7 +1107,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                                 } // end if also a ROW
                             } // end if BOX
 
-                            resetReductionVars();
+                            resetActiveMethod();
                         } // end if
                         return true;
                     } // end if we have a pair
@@ -1349,7 +1315,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     jl.setBackground(theHighlightBackground);
                 } else { // There are pending reductions
                     stripX(areaType, area1, area2, alt1, alt2, theValue);
-                    resetReductionVars();
+                    resetActiveMethod();
                 } // end if pendingReductions or not
                 return true;
             } // end for j - each value
@@ -1478,8 +1444,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if (what.equals("Exit")) System.exit(0);
 
         if (what.equals("Remove Highlighting")) {
-            highlightOff();
-            resetReductionVars();
+            resetActiveMethod();
         } // end if
 
         if (what.equals("Restart")) {
@@ -1507,14 +1472,53 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end if
 
         if (what.equals("Set Auto-solution delay...")) {
+            String title = what.substring(0, what.length()-3);
+            String prompt = "Enter a value for the delay\n";
+            prompt += "(milliseconds; default is 700)";
             try {
                 int ans = Integer.parseInt( (String) JOptionPane.showInputDialog(
-                    theFrame, "Enter a value (in milliseconds) for the delay",
-                    what, JOptionPane.QUESTION_MESSAGE, null, null, autoDelay));
+                    theFrame, prompt, title,
+                    JOptionPane.QUESTION_MESSAGE, null, null, autoDelay));
                 autoDelay = ans < 1 ? 1:ans;
             } catch(NumberFormatException nfe) {
                 System.out.println(nfe.getMessage());
                 System.out.println("Value remains unchanged - " + autoDelay + "ms");
+            }
+        }
+
+        if (what.equals("Reorder the methodologies...")) {
+            final Orderer orderPanel = new Orderer(methodChoices, methodOrder);
+
+            JButton jbDefault = new JButton("Default");
+            Font f = new Font("Dialog", Font.PLAIN, 16);
+            jbDefault.setFont(f);
+            jbDefault.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent actionEvent) {
+                    ArrayList<Integer> al = Orderer.getDefaultOrder(methodChoices);
+                    orderPanel.setTheNewOrder(al);
+                }
+            });
+
+            Object[] options = { "OK", "Cancel", jbDefault };
+
+            int reply = JOptionPane.showOptionDialog(null,
+                    orderPanel,
+                    "Reorder the methodologies ",
+                    JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    options,
+                    null
+            );
+
+            if (reply == JOptionPane.YES_OPTION)
+            {
+                // We should stop any in-progress autoSolution in this case.
+                setAutomatic(false);
+
+                methodOrder = orderPanel.getNewOrder();
+                System.out.println(methodOrder);
             }
         }
 
@@ -1540,7 +1544,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if (!checkDuplicates(BOX)) return;
 
         if (checkComplete()) {
-            sweep(); // Locks in the solution
+            sweep(); // Locks in the solution; one possibility per square.
             showMessage("Solved!");
             intState = SOLVED;
             jbStart.setText("Quit");
@@ -1737,14 +1741,16 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
 
     // These settings need to be done in multiple places
-    private void resetReductionVars() {
+    private void resetActiveMethod() {
+        highlightOff();
         pendingReductions = false;
         pendingAssignment = false;
+        activeMethod = -1;
 
         intNakedIndex1 = -1;
         intNakedIndex2 = -1;
         intNakedIndex3 = -1;
-    } // end resetReductionVars
+    } // end resetActiveMethod
 
 
     // Resweep the vector and update the tool tip text for every square
@@ -1794,17 +1800,35 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end resweep
 
 
+    private void setAutomatic(boolean b) {
+        if (!b) {
+            blnAutoSolve = false;
+            jbAuto.setText("Auto On");
+
+            pendingAssignment = false;
+            pendingReductions = false;
+            // If we were on auto before this, the sleep from that thread will expire,
+            // we will do one more 'findNext', and thanks to the above settings it will
+            // re-highlight the most recent method instead of going on one more step.
+        } else {
+            blnAutoSolve = true;
+            jbAuto.setText("Auto Off");
+
+            handleNextClick();
+        } // end if
+    } // end setAutomatic
+
+    private void setConfigDefaults() {
+        autoDelay = 700;
+        methodOrder = Orderer.getDefaultOrder(methodChoices);
+    }
+
     // The pendingReductions variable is not so tightly held that we
     //   need a 'set' and a 'get' for it.  This method is here because
-    //   we may need to know (later) if it had ever been true.
-    private void setPendingAssignment(boolean b) {
-        pendingAssignment = b;
-    } // end setPendingAssignment
-
-
-    // The pendingReductions variable is not so tightly held that we
-    //   need a 'set' and a 'get' for it.  This method is here because
-    //   we may need to know (later) if it had ever been true.
+    //   there is a corner-case situation where we will need to know
+    //   if it had ever been true (for any method, during the entire
+    //   solution, not just a specific 'pass').  So - definitely use it
+    //   when setting to 'true'; optional when setting false.
     private void setPendingReductions(boolean b) {
         pendingReductions = b;
         if (b) hadPendingReductions = true;
@@ -1971,28 +1995,67 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end sweep
 
 
-    private void setAutomatic(boolean b) {
-        if (!b) {
-            blnAutoSolve = false;
-            jbAuto.setText("Auto On");
-
-            pendingAssignment = false;
-            pendingReductions = false;
-            // Since we were on auto before this, the sleep from that thread will expire,
-            // we will do one more 'findNext', and thanks to the above settings it will
-            // re-highlight the most recent method instead of going on one more step.
-        } else {
-            blnAutoSolve = true;
-            jbAuto.setText("Auto Off");
-
-            handleNextClick();
-        } // end if
-    } // end setAutomatic
-
     // A way of sending output to the screen, that can easily be 'silenced'
     // with a change to a global boolean flag.
     private void loggit(String message) {
         if (debug) System.out.println(message);
     }
+
+    private void setOptionsFromConfig() {
+        String strAutoDelay = config.getProperty("AUTO_DELAY");
+        autoDelay = Integer.parseInt(strAutoDelay);
+
+        String strMethodOrder = config.getProperty("METHOD_ORDER");
+        String[] strArrayMO = strMethodOrder.split(",");
+        methodOrder = new ArrayList<Integer>();
+        for(String s: strArrayMO) {
+            methodOrder.add(Integer.parseInt(s));
+        }
+        System.out.println(methodOrder);
+    }
+
+    private MouseAdapter makeMouseAdapter() {
+        return new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+
+                String theValues = " 123456789";
+                JLabel jl = (JLabel) e.getSource();
+                String startText = jl.getText();
+                String ttText;
+                int adjust = 1;
+
+                ttText = jl.getToolTipText(); // Note - no trim here.
+                if (ttText != null) {
+                    if (ttText.length() == 1) return; // Original definition, or solution.
+                    // User-defined answers will have length 2 since a blank is
+                    //   another possibility, to allow them to un-set the value.
+                } // end if
+
+                // Look for right mouse press.
+                int m = e.getModifiers();
+                if ((m & InputEvent.BUTTON3_MASK) != 0) adjust = -1;
+
+                if (intState == DEFINING) {
+                    int index = theValues.indexOf(startText);
+                    index += adjust;
+                    if (index > 9) index = 0;
+                    if (index < 0) index = 9;
+                    jl.setText(theValues.substring(index, index + 1));
+                } // end if
+
+                if (intState == SOLVING) {
+                    theValues = jl.getToolTipText();
+                    int theMax = theValues.length() - 1;
+                    int index = theValues.indexOf(startText);
+                    index += adjust;
+                    if (index > theMax) index = 0;
+                    if (index < 0) index = theMax;
+                    jl.setText(theValues.substring(index, index + 1));
+                    jl.setForeground(Color.blue);
+                } // end if
+            } // end mousePressed
+        };
+    }
+
 
 } // end class

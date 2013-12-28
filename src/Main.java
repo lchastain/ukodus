@@ -11,9 +11,12 @@ public class Main implements Values {
         JMenu jmView = new JMenu("View");
         jmView.add(mi_view_1); // Menu Item - Restart
         jmView.add(mi_view_2); // Menu Item - Remove Highlighting
+        jmView.add(mi_view_3); // Explanation
         jmView.add(new JMenuItem("Set Auto-solution delay..."));
+        jmView.add(new JMenuItem("Reorder the methodologies..."));
         mi_view_1.setEnabled(false);
         mi_view_2.setEnabled(false);
+        mi_view_3.setEnabled(false);
 
         JMenu jmHelp = new JMenu("Help");
         jmHelp.add(new JMenuItem("Documentation"));
