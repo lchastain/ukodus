@@ -398,8 +398,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             case 11: return findX(ROW);
             case 12: return findInsideBox(COL);
             case 13: return findInsideBox(ROW);
-            //case 14: return findOutsideBox(COL);
-            //case 15: return findOutsideBox(ROW);
+            case 14: return findOutsideBox(COL);
+            case 15: return findOutsideBox(ROW);
             default: return false;
         }
     } // end callActiveMethod
@@ -796,10 +796,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end findHighlander
 
 
-    // When a value in a given Row or Column is restricted to a single box,
-    //   if that box has other squares with that possible value that are
-    //   not in that row or col, the value may be removed as a possibility
-    //   from those squares that are in the box but outside the row or col.
+    // Box interaction (inside the box) - Row and Column
+    // Consider a specific value in a row or column.  If the squares that it may
+    // possibly occupy in that area are all within the same box, then that value can
+    // be removed as a possibility for all other squares of the box.
     private boolean findInsideBox(int intInteractionType) {
         JLabel jl;
         String theValues;
@@ -1116,6 +1116,138 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         } // end for i
         return false;
     } // end findNakedPair
+
+
+    // Box interaction (outside the box) - Row and Column
+    // Consider a specific value in a box.  If the squares that it may
+    // possibly occupy in the box are also all within the same row or
+    // column, then that value can be removed as a possibility for all
+    // other squares of the row or column.
+    private boolean findOutsideBox(int intInteractionType) {
+        JLabel jl;
+        String theValues;
+        int theIndex;
+        int theArea;
+
+        // Set our array of vector indices to BOX.
+        setTheArray(BOX);
+        if (theArray == null) return false;
+
+        // And set aside a pointer to the correct area type indices array:
+        int[][] areaIndices;
+        if(intInteractionType == ROW) areaIndices = rowIndices;
+        else areaIndices = colIndices;
+
+        for (int i = 0; i < 9; i++) { // Look at each of the 9 boxes
+            for (int j = 1; j <= 9; j++) { // Look at each possible value
+                theArea = -1; // initialization
+
+                for (int k = 0; k < 9; k++) { // Look at each of the 9 squares in the BOX
+
+                    // Use the array of vector indices to select the correct square.
+                    theIndex = theArray[i][k];
+                    jl = squares.elementAt(theIndex);
+
+                    // If the square has been solved, skip it.
+                    if (!jl.getText().trim().equals("")) continue;
+
+                    theValues = jl.getToolTipText().trim();
+
+                    // Does this square contain the value we're looking for?
+                    if (theValues.contains(String.valueOf(j))) {
+                        // If this is the first time we have considered this value,
+                        //   determine which box it is contained within.
+                        if (theArea == -1) theArea = getPosition(intInteractionType, theIndex);
+                        else { // Otherwise, make sure this subsequent occurrence
+                            // is in the same area as any that were encountered earlier.
+                            // If not, then look at the next value.
+                            if (theArea != getPosition(intInteractionType, theIndex)) {
+                                theArea = -1;
+                                break; // do not continue to examine more squares
+                            } // end if it is in a different box
+
+                        } // end else
+                    } // end if the value is in the square
+                } // end for k - for each square
+
+                // At this point, we have either found no occurence of the value under
+                //   consideration, or it has been found in one and only one area.  If
+                //   not found, we move on to consider the next value.  Otherwise -
+                if (theArea != -1) { // Found in one and only one area.
+                    System.out.print("The value " + String.valueOf(j) + " in ");
+                    System.out.print("Box " + String.valueOf(i+1));
+                    System.out.println(" may interact with " + getAreaTypeString(intInteractionType) +
+                            " " + String.valueOf(theArea+1));
+
+                    // Now, look for other instances of the value that are in that
+                    //   same area, but OUTSIDE the box.
+                    int tmpIndex;
+                    JLabel jlTmp;
+                    String strTmp;
+                    boolean reductionsWereMade = false;
+                    for (int q = 0; q < 9; q++) { // For each square in the area
+                        tmpIndex = areaIndices[theArea][q];
+
+                        // If this square of the box is also contained
+                        //   in the same area we're working in, skip it.
+                        if (getPosition(BOX, tmpIndex) == i) continue;
+                        // Note that this WILL happen, three times.
+
+                        jlTmp = squares.elementAt(tmpIndex);
+                        strTmp = jlTmp.getToolTipText();
+                        if (strTmp.contains(String.valueOf(j))) {
+                            if (pendingReductions) {
+                                reductionsWereMade = true;
+                                jlTmp.setToolTipText(strTmp.replace(String.valueOf(j), ""));
+                            } else {
+                                System.out.print("The value " + String.valueOf(j) + " in ");
+                                System.out.print("Box " + String.valueOf(i + 1));
+                                System.out.println(" interacts with " + getAreaTypeString(intInteractionType)
+                                        + " " + String.valueOf(theArea + 1));
+
+                                // Highlight the box and area
+                                theHighlightBackground = Color.yellow.darker();
+                                highlightOn(BOX, i);
+                                highlightOn(intInteractionType, theArea);
+
+                                // Now show the intersecting squares that have the value -
+                                for (int hl = 0; hl < 9; hl++) {
+                                    jlTmp = squares.elementAt(areaIndices[theArea][hl]);
+
+                                    // Leave alone, if value not here.
+                                    if (!jlTmp.getToolTipText().contains(String.valueOf(j))) continue;
+
+                                    // Squares in the intersection that contain the value.
+                                    jlTmp.setBackground(Color.yellow);
+
+                                    // The squares in the area we've been considering,
+                                    //   that will not be reduced.
+                                    if (getPosition(BOX, areaIndices[theArea][hl]) == i)
+                                        jlTmp.setBackground(Color.orange);
+                                } // end for
+
+                                setPendingReductions(true);
+                                return true;
+                            } // end if/else
+                        } // end if - if this square contains the value
+
+                    } // end for q - for each square in the box
+
+                    // Above was one square at a time, doing the reductions where
+                    //   possible.  Here, we detect that this has been done for
+                    //   all squares in the Box, and return.
+                    if (reductionsWereMade) {
+                        pendingReductions = false;
+                        resetActiveMethod();
+                        return true;
+                    } // end if
+
+                } // end if we have a box
+            } // end for j - for each value
+        } // end for i - for each area
+
+        return false;
+    } // end findOutsideBox
 
 
     //------------------------------------------------------------------------

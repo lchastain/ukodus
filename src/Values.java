@@ -35,9 +35,10 @@ public interface Values {
             "Hidden Pair in a Row",
             "X-wing for Columns",
             "X-wing for Rows",
-            "Box interaction with Column",
-            "Box interaction with Row",
-            "Column interaction with Box",
-            "Row interaction with Box"            ));
+            "Box (inside) interaction with Column",
+            "Box (inside) interaction with Row",
+            "Box (outside) interaction with Column",
+            "Box (outside) interaction with Row"
+    ));
 
 }
