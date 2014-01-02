@@ -41,7 +41,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     private int autoDelay;
     private ArrayList<Integer> methodOrder;
     private boolean debug = false;
-    private Properties config = new Properties();
+    private Properties config;
     private int activeMethod;
 
     //------------------------------------------------------------------
@@ -81,6 +81,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
         // Load the config file
         try {
+            config = new Properties();
             config.load(new FileInputStream("config.properties"));
             setOptionsFromConfig();
         } catch (IOException ex) {
@@ -400,6 +401,8 @@ public class Laffingas extends JPanel implements Values, ActionListener {
             case 13: return findInsideBox(ROW);
             case 14: return findOutsideBox(COL);
             case 15: return findOutsideBox(ROW);
+            case 16: return findSwordfish(COL);
+            case 17: return findSwordfish(ROW);
             default: return false;
         }
     } // end callActiveMethod
@@ -1174,10 +1177,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 //   consideration, or it has been found in one and only one area.  If
                 //   not found, we move on to consider the next value.  Otherwise -
                 if (theArea != -1) { // Found in one and only one area.
-                    System.out.print("The value " + String.valueOf(j) + " in ");
-                    System.out.print("Box " + String.valueOf(i+1));
-                    System.out.println(" may interact with " + getAreaTypeString(intInteractionType) +
-                            " " + String.valueOf(theArea+1));
+                    //System.out.print("The value " + String.valueOf(j) + " in ");
+                    //System.out.print("Box " + String.valueOf(i+1));
+                    //System.out.println(" may interact with " + getAreaTypeString(intInteractionType) +
+                    //        " " + String.valueOf(theArea+1));
 
                     // Now, look for other instances of the value that are in that
                     //   same area, but OUTSIDE the box.
@@ -1251,38 +1254,49 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
 
     //------------------------------------------------------------------------
-    // Method Name: findX
+    // Method Name: findSwordfish
     //
-    // Look for a row where a potential value appears in two and only two
-    //   squares.  Then, continue looking until you find a second such row,
-    //   for the same value and in the same two columns.  Since that value
-    //   cannot be both places in the row or both places in the column, it will
-    //   be in either the (top left and bottom right), or (top right and bottom
-    //   left) squares.  If you drew lines between the alternative locations,
-    //   you would see an 'X'.  The methodology is known as 'X-wing'.  Once
+    // For the naming and comments below, if an 'area' is a ROW then an
+    // 'altArea' is the COL that intersects the area at the value being
+    // considered.  If the area is a COL then the altArea is a ROW.
+    // The input parameter will specify the area type.
+    //
+    // Look for an area where a potential value appears in two and only two
+    //   squares.  Then, continue looking through the same area type for a
+    //   second and third such area (value appears only twice) for the same value,
+    //   where each square the value appears in is at an intersection with an
+    //   altArea that also intersects with that same value in one of the other two areas.
+    //
+    // Restated:  One of the values in area1 will be in a square at an altArea intersection
+    // where the altArea intersects with area2 at the square that holds the same value.  The
+    // other value in area1 will be in a square where the altArea intersects with area3
+    // at the square that contains the value.  For area2, the intersections will be with
+    // areas 1 and 3, and for area3 they will be with areas 1 and 2, always intersecting at
+    // the same value.
+    //
+    // This methodology is called a Swordfish - it is easily recognizable as an extension
+    // of the X-wing, and the internet will explain that the pattern
+    // looks a little like the wings of a biplane, and there was this famous biplane known
+    // as 'the Swordfish', so there you go.  Given my own 'naming' track record, I guess I
+    // have no non-hypocritical basis for argument about it.
+    //
+    // The end result is that we will have six squares where the value will either
+    //   go into one distinct set of three squares, or the other.  Once
     //   such a value is found, this value can be eliminated as a possibility
-    //   in all other squares in either of the two columns.
+    //   in the remaining six squares in each of the three altAreas.
     //
     // There are 3 possible outcomes:
-    // 1.  An X was not found, or it was found to be irrelevant - returns false.
-    // 2.  An X was found for the first time - Area highlighted, returns true.
-    // 3.  An X was found for the second time - Reductions made, returns true.
+    // 1.  A Swordfish was not found, or it was found to be irrelevant - returns false.
+    // 2.  A Swordfish was found on the first pass - Area highlighted, returns true.
+    // 3.  A Swordfish (the same one from the first pass) was found on the second pass -
+    //          Reductions are made, returns true.
     //------------------------------------------------------------------------
-    public boolean findX(int areaType) {
-        int area1, area2;
-        int alt1, alt2;
-        String strValues;
-        String aValue;
-        int theIndex;
-        int aCount;
-        String allValues = "123456789";
-        int counterIndex;
-        int theCounts[][] = new int[9][9];
-
+    public boolean findSwordfish(int areaType) {
+        int area1, area2, area3;
+        int altArea1, altArea2, altArea3;
         String areaName = getAreaTypeString(areaType);
 
         int altAreaType;
-        int altArray[][];
         String altName;
 
         debug = false;
@@ -1291,122 +1305,298 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         if(areaType == ROW) {
             theArray = rowIndices;
             altAreaType = COL;
+            altName = getAreaTypeString(COL);
+        } else if(areaType == COL) {
+            theArray = colIndices;
+            altAreaType = ROW;
+            altName = getAreaTypeString(ROW);
+        } else return false;
+
+        int theCounts[][] = getTheCounts(areaType);
+
+        // Now scan 'theCounts' for a possible value to appear twice (and only twice) in an
+        // area.  If we find such a value/area, we continue looking for a second area that
+        // also has that same value as a possibility in two places, only.  Once we find these
+        // two areas (if we do), then we have a possible X but only if the altArea intersections
+        // also contain the value as a possibility.
+        for (int i = 0; i < 7; i++) {  // For each area (except the last two)
+            for (int val = 0; val < 9; val++) { // For each value in the counts for this area
+                String theValue = String.valueOf(val + 1);
+                area1 = -1;
+                area2 = -1;
+                area3 = -1;
+
+                if (theCounts[i][val] != 2) continue;
+                // At this point, we have found a value that occurs
+                // exactly twice in area i (area1).
+
+                // Now let's identify area1's two alternate areas, to get the
+                // full 'addresses' of the two occurrences of the value.
+                altArea1 = -1;
+                altArea2 = -1;
+                // Search the first area for locations of occurrences of the value.
+                for (int altNum = 0; altNum < 9; altNum++) { // For each square in the first area
+                    if (squares.elementAt(theArray[i][altNum]).getToolTipText().contains(String.valueOf(val + 1))) {
+                        // We found an occurrence of the value.
+                        if (altArea1 == -1) {
+                            // Set the first occurrence of the value.
+                            // This is somewhat random; later, we will need to ensure that this
+                            //   altArea is the one that has the value intersection with area3.
+                            altArea1 = altNum;
+                            continue;
+                        } // end if
+                        if (altArea2 == -1) {
+                            // Set the second occurrence of the value.
+                            // This is somewhat random; later, we will need to ensure that this
+                            //   altArea is the one that has the value intersection with area2.
+                            altArea2 = altNum;
+                            break; // This is the 2nd in this area and there are only 2.
+                        } // end if
+                    } // end if the square possibilities contain the value
+                } // end for altNum - each square in the first area
+
+                // Now we need to look for a second area where the value occurs only twice but
+                // also intersects with one (and only one) of the altAreas already identified.
+                for (int j = i + 1; j < 8; j++) { // For each subsequent area (except the last)
+                    if (theCounts[j][val] != 2) continue;
+                    boolean b1 = squares.elementAt(theArray[j][altArea1]).getToolTipText().contains(theValue);
+                    boolean b2 = squares.elementAt(theArray[j][altArea2]).getToolTipText().contains(theValue);
+                    if (b1 ^ b2) {  // Exclusive OR; one but not both.
+                        area1 = i;
+                        area2 = j;
+                        break;
+                    } // end if
+                } // end for j
+
+                if (area2 == -1) continue;
+                // We did not find two areas; move on to the next value.
+
+                // Search the second area for 'unknown' locations of occurrences of the value.
+                // If one is found, it will be the 3rd altArea.
+                altArea3 = -1;
+                for (int altNum = 0; altNum < 9; altNum++) { // For each square in the second area
+                    if (squares.elementAt(theArray[area2][altNum]).getToolTipText().contains(theValue)) {
+                        // We found an occurrence of the value but we don't want the
+                        // one that intersects with area1; we want to find the 3rd altArea.
+
+                        // And in addition to skipping over that one, we take this opportunity
+                        // to ensure that it is named 'altArea2', even if the first 'random'
+                        // assignment named it 'altArea1'.
+                        if (altNum == altArea1) {
+                            altArea1 = altArea2;
+                            altArea2 = altNum;
+                            continue;
+                        }
+                        else if (altNum == altArea2) continue; // initial assignment was correct.
+
+                        if (altArea3 == -1) {
+                            // Set the altArea for this third occurrence of the value.
+                            altArea3 = altNum;
+                            //break; // no, don't; we may have found this before correcting altArea2.
+                        } // end if
+                    } // end if the square possibilities contain the value
+                } // end for altNum - each square in the first area
+
+                // Now we need to look for a third area where the value occurs only twice
+                // but also where one of the instances is also in an altArea that intersects with
+                // area1 and the second instance is also in an altArea that intersects with area2.
+                // When comparing this comment to the actual subscripts below, keep in mind that
+                // each altArea occurs twice across the three areas, so the test below that contains
+                // altArea3 is actually testing the intersection with area2.
+                // This is a bit confusing even to me as I write it, but the reasoning is that
+                // altArea2 is defined from the values in area1 (so it has a guaranteed intersection
+                // with area1) and we took steps earlier to ensure that altArea2 will be guaranteed
+                // to intersect with area2 at the value under consideration, meaning that it will
+                // never intersect at the value in area3, but altArea3 may.  Remember that we defined
+                // altArea3 based on value findings in area2, but we do still need to verify that
+                // the address in area3 at altArea3 does indeed contain the value.
+                for (int k = area2 + 1; k < 9; k++) { // For each subsequent area
+                    if (theCounts[k][val] != 2) continue;
+                    if (squares.elementAt(theArray[k][altArea1]).getToolTipText().contains(theValue)) {
+                        if (squares.elementAt(theArray[k][altArea3]).getToolTipText().contains(theValue)) {
+                            area3 = k;
+                            break;
+                        } // end if
+                    } // end if
+                } // end for k
+
+                // We did not find three areas; move on to the next value.
+                if (area3 == -1) continue;
+
+                // If we made it here, we have a Swordfish.  But for the moment,
+                // just prepare the announcement; do not issue it yet.
+                dMessage = "Found a Swordfish for value " + theValue + " at "
+                        + areaName + " " + String.valueOf(area1+1) + " " + altName
+                        + "s " + twoAreasToString(altArea1, altArea2) + ", "
+                        + areaName + " " + String.valueOf(area2+1) + " " + altName
+                        + "s " + twoAreasToString(altArea2, altArea3) + ", and "
+                        + areaName + " " + String.valueOf(area3+1) + " " + altName
+                        + "s " + twoAreasToString(altArea1, altArea3);
+
+                // Taking a moment to give out some debug printouts..
+                if(!pendingReductions) {  // We only want this on the first pass, if at all -
+                    loggit("(Possible) " + dMessage);
+
+                    // This action is just the test, not the actual 'strip'.
+                    // Made this boolean as a separate assignment rather than embedding it
+                    // in the one usage area below, to aid in development and debugging by
+                    // keeping it as a separate statement that can be stepped thru independently.
+                    boolean reducible = stripSword(areaType, theValue, area1, area2, area3,
+                        altArea1, altArea2, altArea3);
+
+                    if (reducible) {
+                        loggit("\t and it is reducible!  Highlighting (and restating) it now..");
+                    } else {
+                        // A Swordfish does us no good if it is not reducible -
+                        loggit("\t but not reducible; continuing on to next value..");
+                        continue;
+                    }
+                }
+
+                // So - if we're here, we have a reducible Swordfish
+                if (!pendingReductions) { // Highlight the Swordfish and return true
+                    System.out.println(dMessage);
+                    setPendingReductions(true);
+                    JLabel jl;
+
+                    theHighlightBackground = Color.yellow.darker();
+                    highlightOn(altAreaType, altArea1);
+                    highlightOn(altAreaType, altArea2);
+                    highlightOn(altAreaType, altArea3);
+
+                    theHighlightBackground = Color.yellow.brighter();
+
+                    // Area 1
+                    jl = squares.elementAt(theArray[area1][altArea1]);
+                    jl.setBackground(theHighlightBackground);
+                    jl = squares.elementAt(theArray[area1][altArea2]);
+                    jl.setBackground(theHighlightBackground);
+
+                    // Area 2
+                    jl = squares.elementAt(theArray[area2][altArea2]);
+                    jl.setBackground(theHighlightBackground);
+                    jl = squares.elementAt(theArray[area2][altArea3]);
+                    jl.setBackground(theHighlightBackground);
+
+                    // Area 3
+                    jl = squares.elementAt(theArray[area3][altArea1]);
+                    jl.setBackground(theHighlightBackground);
+                    jl = squares.elementAt(theArray[area3][altArea3]);
+                    jl.setBackground(theHighlightBackground);
+
+                } else { // There are pending reductions
+                    stripSword(areaType, theValue, area1, area2, area3, altArea1, altArea2, altArea3);
+                    resetActiveMethod();
+                } // end if pendingReductions or not
+                return true;
+            } // end for each val
+        } // end for i - each row
+
+        return false;
+    } // end findSwordfish
+
+
+    //------------------------------------------------------------------------
+    // Method Name: findX
+    //
+    // For the naming and comments below, if an 'area' is a ROW then an
+    // 'altArea' is a COL.  If the area is a COL then the altArea is a ROW.
+    // The input parameter will specify the area type.
+    //
+    // Look for an area where a potential value appears in two and only two
+    //   squares.  Then, continue looking until you find a second such area,
+    //   for the same value and in the same two altAreas.  Since that value
+    //   cannot be both places in the row or both places in the column, it will
+    //   be in either the (top left and bottom right), or (top right and bottom
+    //   left) squares.  If you drew lines between the alternative locations,
+    //   you would see an 'X'.  The methodology is known as 'X-wing'.  Once
+    //   such a value is found, this value can be eliminated as a possibility
+    //   in all other squares in either of the two altAreas.
+    //
+    // There are 3 possible outcomes:
+    // 1.  An X was not found, or it was found to be irrelevant - returns false.
+    // 2.  An X was found on the first pass - Area highlighted, returns true.
+    // 3.  An X (the same one from the first pass) was found on the second pass -
+    //          Reductions are made, returns true.
+    //------------------------------------------------------------------------
+    public boolean findX(int areaType) {
+        int area1, area2;
+        int alt1, alt2;
+        String areaName = getAreaTypeString(areaType);
+
+        int altAreaType;
+        int altArray[][];
+        String altName;
+
+        if(areaType == ROW) {
+            theArray = rowIndices;
+            altAreaType = COL;
             altArray = colIndices;
             altName = getAreaTypeString(COL);
-        }
-        else {
+        } else if(areaType == COL) {
             theArray = colIndices;
             altAreaType = ROW;
             altArray = rowIndices;
             altName = getAreaTypeString(ROW);
-        }
+        } else return false;
 
-        if (theArray == null) return false;
+        int theCounts[][] = getTheCounts(areaType);
 
-        //--------------------------------------------------------------
-        // Scan the matrix and get a count of ALL possibilities in each area.
-        //   Place the results into 'theCounts[][]', where the
-        //   first dimension is the area, the second is the value
-        //   that is being counted.
-        //--------------------------------------------------------------
-        for (int i = 0; i < 9; i++) { // for each area
-            strValues = "";
-            for (int j = 0; j < 9; j++) { // for each square in the area
-                theIndex = theArray[i][j];
-
-                // If the square is not empty -
-                if (!squares.elementAt(theIndex).getText().trim().equals("")) continue;
-
-                // Get all the possible answers for the entire area
-                strValues += squares.elementAt(theIndex).getToolTipText().trim();
-            } // end for j
-
-            dMessage = "The possibilities for all open squares on " + areaName;
-            dMessage += " " + String.valueOf(i+1) + " are " + strValues;
-            loggit(dMessage);
-
-            // Get a count for each possible value
-            for (int k = 0; k < 9; k++) { // For each possible value
-                aValue = allValues.substring(k, k + 1);
-                aCount = 0;
-                counterIndex = 0;
-                while (counterIndex >= 0) {
-                    counterIndex = strValues.indexOf(aValue, counterIndex);
-                    if (counterIndex != -1) {
-                        aCount++;
-                        counterIndex++;
-                    } // end if
-                } // end while
-
-                theCounts[i][k] = aCount;
-                //  System.out.print("In area " + String.valueOf(i+1));
-                //  System.out.println(" possible value " + aValue + " found " + aCount + " times");
-            } // end for k
-        } // end for i
-        //--------------------------------------------------------------
-
-        // Now scan 'theCounts' for values of 2.  If we find two areas for
-        //   the same value, we have our areas.
+        // Now scan 'theCounts' for a possible value to appear twice (and only twice) in an
+        // area.  If we find such a value/area, we continue looking for a second area that
+        // also has that same value as a possibility in two places, only.  Once we find these
+        // two areas (if we do), then we have a possible X but only if the altArea intersections
+        // also contain the value as a possibility.
         for (int i = 0; i < 8; i++) {  // For each area (except the last)
             for (int j = 0; j < 9; j++) { // For each value
+                String theValue = String.valueOf(j + 1);
                 area1 = -1;
                 area2 = -1;
+
                 if (theCounts[i][j] != 2) continue;
+                // At this point, we have found a value that occurs
+                // exactly twice in this area.
 
-                // The count is 2; we need to look further...
-                for (int k = i + 1; k < 9; k++) { // For each subsequent area
-                    if (theCounts[k][j] == 2) {
-                        area1 = i;
-                        area2 = k;
-                    } // end if
-                } // end for
-
-                if (area2 == -1) continue; // We found a first area but not a second.
-
-                loggit("Found a possible X on " + areaName +
-                        "s " + String.valueOf(area1+1) + ", " + String.valueOf(area2+1) + " for " +
-                        "value" + " " + String.valueOf(j+1));
-
-                // Now look to see that the values appear in the same columns.
+                // Now let's identify the two alternate areas, to get the
+                // full 'addresses' of the two occurrences of the value.
                 alt1 = -1;
                 alt2 = -1;
-
-                // For area1 we can just set the altAreas; no checking required.
-                for (int k = 0; k < 9; k++) { // For each square in area1
-                    if (squares.elementAt(theArray[area1][k]).getToolTipText().contains(String.valueOf(j + 1))) {
+                for (int k = 0; k < 9; k++) { // For each square in the first area
+                    if (squares.elementAt(theArray[i][k]).getToolTipText().contains(String.valueOf(j + 1))) {
                         if (alt1 == -1) {
                             alt1 = k;
-                            //System.out.print("  First " + altName + ": " + String.valueOf(k+1));
                             continue;
                         } // end if
                         if (alt2 == -1) {
                             alt2 = k;
-                            //System.out.println ("\tSecond " + altName + ": " + String.valueOf(k+1));
-                            break; // This is the 2nd on this row and there are only 2.
+                            break; // This is the 2nd in this area and there are only 2.
                         } // end if
                     } // end if the square possibilities contain the value
-                } // end for k - each square
+                } // end for k - each square in the first area
 
-                // For area2 we need to check that the value appears in the same altAreas.
-                //   If it does not, we keep looking.
-                if (!squares.elementAt(theArray[area2][alt1]).getToolTipText().contains(String.valueOf(j + 1))) {
-                    dMessage = "   but the value is not present at " + areaName +
-                            " " + (area2+1) + " " + altName + " " + (alt1+1);
-                    loggit(dMessage);
-                    continue; // on to the next value
-                } // end if the square possibilities do not contain the value
+                // Now we need to look for a second area where the value occurs only twice
+                // and intersects the same two altAreas.  Note that we will not find a third
+                // such area, as it would mean that the puzzle is insolvable.
+                for (int k = i + 1; k < 9; k++) { // For each subsequent area
+                    if (theCounts[k][j] != 2) continue;
+                    if (squares.elementAt(theArray[k][alt1]).getToolTipText().contains(String.valueOf(j + 1))) {
+                        if (squares.elementAt(theArray[k][alt2]).getToolTipText().contains(String.valueOf(j + 1))) {
+                            String msg = "Found a potential X for value " + theValue + " at " + areaName +
+                                "s " + String.valueOf(i+1) + " and " + String.valueOf(k+1) + ", " +
+                                altName + "s " + String.valueOf(alt1+1) + " and " + String.valueOf(alt2+1);
+                            //System.out.println(msg);
+                            area1 = i;
+                            area2 = k;
+                            break;
+                        } // end if
+                    } // end if
+                } // end for k
 
-                if (!squares.elementAt(theArray[area2][alt2]).getToolTipText().contains(String.valueOf(j + 1))) {
-                    dMessage = "   but the value is not present at " + areaName +
-                            " " + (area2+1) + " " + altName + " " + (alt2+1);
-                    loggit(dMessage);
-                    continue; // on to the next value
-                } // end if the square possibilities do not contain the value
+                if (area2 == -1) continue;
+                // We did not find two areas; move on to the next value.
 
                 // If we made it here, we have an X.
-
                 // But it does us no good if it is not reducible -
-                String theValue = String.valueOf(j + 1);
                 if (!isAreaXreducible(areaType, area1, area2, alt1, alt2, theValue)) {
                     //System.out.println("\t but not reducible; continuing on..");
                     continue;
@@ -1414,15 +1604,12 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
                 // So - if we're here, we have a reducible X
                 if (!pendingReductions) { // Highlight the X and return true
-                    setPendingReductions(true);
-                    // System.out.println("  Reducible: " + pendingXReductions);
-                    System.out.print("Found an X for value [" + theValue + "] on ");
-                    System.out.print(areaName);
-                    System.out.print("s " +
-                            String.valueOf(area1 + 1) + ", " + String.valueOf(area2 + 1));
-                    System.out.print(" & " + altName);
-                    System.out.println("s " + String.valueOf(alt1 + 1) + ", " + String.valueOf(alt2 + 1));
+                    String msg = "Found an X for value " + theValue + " at " + areaName +
+                            "s " + String.valueOf(i+1) + " and " + String.valueOf(area2+1) + ", " +
+                            altName + "s " + String.valueOf(alt1+1) + " and " + String.valueOf(alt2+1);
+                    System.out.println(msg);
 
+                    setPendingReductions(true);
                     JLabel jl;
 
                     theHighlightBackground = Color.yellow.darker();
@@ -1545,6 +1732,60 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end getPosition
 
 
+    //--------------------------------------------------------------
+    // Scan the matrix and get a count of ALL possibilities in each area.
+    //   Place the results into 'theCounts[][]', where the first dimension
+    //   is the area (ROW, COL, or BOX) and the second is the value
+    //   that is being counted (1-9).  But note that the first dimension
+    //   is NOT set by the input param; it is just for reporting.  The
+    //   actual setting of the areaType was done when 'theArray' was set.
+    //--------------------------------------------------------------
+    public int[][] getTheCounts(int areaType) {
+        int theCounts[][] = new int[9][9];
+        String strValues;
+        String aValue;
+        int theIndex;
+        int aCount;
+        String allValues = "123456789";
+        int counterIndex;
+
+        for (int i = 0; i < 9; i++) { // for each area
+            strValues = "";
+            for (int j = 0; j < 9; j++) { // for each square in the area
+                theIndex = theArray[i][j];
+
+                // If the square is not empty -
+                if (!squares.elementAt(theIndex).getText().trim().equals("")) continue;
+
+                // Get all the possible answers for the entire area
+                strValues += squares.elementAt(theIndex).getToolTipText().trim();
+            } // end for j
+
+            String dMessage = "The possibilities for all open squares on " + getAreaTypeString(areaType);
+            dMessage += " " + String.valueOf(i+1) + " are " + strValues;
+            //System.out.println(dMessage);
+
+            // Get a count for each possible value
+            for (int k = 0; k < 9; k++) { // For each possible value
+                aValue = allValues.substring(k, k + 1);
+                aCount = 0;
+                counterIndex = 0;
+                while (counterIndex >= 0) {
+                    counterIndex = strValues.indexOf(aValue, counterIndex);
+                    if (counterIndex != -1) {
+                        aCount++;
+                        counterIndex++;
+                    } // end if
+                } // end while
+
+                theCounts[i][k] = aCount;
+                //  System.out.print("In area " + String.valueOf(i+1));
+                //  System.out.println(" possible value " + aValue + " found " + aCount + " times");
+            } // end for k
+        } // end for i
+        return theCounts;
+    }
+
     public void handleMenuBar(String what) {
         if (what.equals("Open...")) {
             // Create a file chooser
@@ -1612,6 +1853,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                     theFrame, prompt, title,
                     JOptionPane.QUESTION_MESSAGE, null, null, autoDelay));
                 autoDelay = ans < 1 ? 1:ans;
+                storeConfigFile();
             } catch(NumberFormatException nfe) {
                 System.out.println(nfe.getMessage());
                 System.out.println("Value remains unchanged - " + autoDelay + "ms");
@@ -1650,6 +1892,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 setAutomatic(false);
 
                 methodOrder = orderPanel.getNewOrder();
+                storeConfigFile();
                 System.out.println(methodOrder);
             }
         }
@@ -1736,14 +1979,16 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     public void highlightOn(int intType, int intNum) {
         JLabel jl;
 
-        // This may be ok for now, since highlighting is a last step in
-        //   any reduction methodology.
+        int[][] tmp = theArray;
+
+        // We do this as a shortcut but we need to undo it before leaving.
         setTheArray(intType);
 
         for (int i = 0; i < 9; i++) {  // 2nd dimension iterator
             jl = squares.elementAt(theArray[intNum][i]);
             jl.setBackground(theHighlightBackground);
         } // end for
+        theArray = tmp; // put it back to whatever it was.
 
         mi_view_2.setEnabled(true);
     } // end highlightOn
@@ -1797,8 +2042,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         int [][] searchArray;
         if(areaType == ROW) {
             searchArray = colIndices;
-        }
-        else {
+        } else {
             searchArray = rowIndices;
         }
 
@@ -1871,6 +2115,55 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         loadFile("last.txt");
     } // end loadLast
 
+
+    // A way of sending output to the screen, that can easily be 'silenced'
+    // with a change to a global boolean flag.
+    private void loggit(String message) {
+        if (debug) System.out.println(message);
+    }
+
+    private MouseAdapter makeMouseAdapter() {
+        return new MouseAdapter() {
+            public void mousePressed(MouseEvent e) {
+
+                String theValues = " 123456789";
+                JLabel jl = (JLabel) e.getSource();
+                String startText = jl.getText();
+                String ttText;
+                int adjust = 1;
+
+                ttText = jl.getToolTipText(); // Note - no trim here.
+                if (ttText != null) {
+                    if (ttText.length() == 1) return; // Original definition, or solution.
+                    // User-defined answers will have length 2 since a blank is
+                    //   another possibility, to allow them to un-set the value.
+                } // end if
+
+                // Look for right mouse press.
+                int m = e.getModifiers();
+                if ((m & InputEvent.BUTTON3_MASK) != 0) adjust = -1;
+
+                if (intState == DEFINING) {
+                    int index = theValues.indexOf(startText);
+                    index += adjust;
+                    if (index > 9) index = 0;
+                    if (index < 0) index = 9;
+                    jl.setText(theValues.substring(index, index + 1));
+                } // end if
+
+                if (intState == SOLVING) {
+                    theValues = jl.getToolTipText();
+                    int theMax = theValues.length() - 1;
+                    int index = theValues.indexOf(startText);
+                    index += adjust;
+                    if (index > theMax) index = 0;
+                    if (index < 0) index = theMax;
+                    jl.setText(theValues.substring(index, index + 1));
+                    jl.setForeground(Color.blue);
+                } // end if
+            } // end mousePressed
+        };
+    }
 
     // These settings need to be done in multiple places
     private void resetActiveMethod() {
@@ -1959,13 +2252,30 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     //   need a 'set' and a 'get' for it.  This method is here because
     //   there is a corner-case situation where we will need to know
     //   if it had ever been true (for any method, during the entire
-    //   solution, not just a specific 'pass').  So - definitely use it
+    //   solution, not just a specific test).  So - definitely use it
     //   when setting to 'true'; optional when setting false.
     private void setPendingReductions(boolean b) {
         pendingReductions = b;
         if (b) hadPendingReductions = true;
     } // end setPendingReductions
 
+
+    // As much as I'd like to rename this to a 'get', it shouldn't be done
+    // because it is a void.  The current name more correctly describes the work.
+    private void setOptionsFromConfig() {
+        String strAutoDelay = config.getProperty("AUTO_DELAY");
+        autoDelay = Integer.parseInt(strAutoDelay);
+
+        String strMethodOrder = config.getProperty("METHOD_ORDER");
+        strMethodOrder = strMethodOrder.replace("[", "");
+        strMethodOrder = strMethodOrder.replace("]", "");
+        String[] strArrayMO = strMethodOrder.split(",");
+        methodOrder = new ArrayList<Integer>();
+        for(String s: strArrayMO) {
+            methodOrder.add(Integer.parseInt(s.trim()));
+        }
+        System.out.println(methodOrder);
+    }
 
     public void setTheArray(int intAreaType) {
         switch (intAreaType) {
@@ -1999,6 +2309,19 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 JOptionPane.INFORMATION_MESSAGE);
     } // end showMessage
 
+    public void storeConfigFile() {
+        config = new Properties();
+        config.setProperty("AUTO_DELAY", String.valueOf(autoDelay));
+        config.setProperty("METHOD_ORDER", methodOrder.toString());
+
+        try {
+            // Save properties to project root folder
+            config.store(new FileOutputStream("config.properties"), null);
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
 
     //-------------------------------------------------------------------
     // Method Name: stripNaked
@@ -2042,15 +2365,101 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end stripNaked
 
 
+    // Given a Swordfish as implied by the supplied areas, altAreas and value, the
+    //   returned boolean will indicate if the value is anywhere else in the three
+    //   alternate areas.  Further, if 'pendingReductions' is set, we will go ahead
+    //   and remove (strip) the value from the appropriate squares.
+    private boolean stripSword(int areaType, String theVal,
+                               int area1, int area2, int area3,
+                               int altArea1, int altArea2, int altArea3  ) {
+        String theValues;
+        int theIndex;
+        String areaName, altName;
+        String msg = "";
+
+        int [][] searchArray;
+        if(areaType == ROW) {
+            searchArray = colIndices;
+            areaName = "Row";
+            altName = "Col";
+        } else {
+            searchArray = rowIndices;
+            areaName = "Col";
+            altName = "Row";
+        }
+
+        for (int i = 0; i < 9; i++) { // Check altArea1
+            if (i == area1) continue; // The square at [altArea1][area1] is already known to contain theVal
+            if (i == area3) continue; // The square at [altArea1][area3] is already known to contain theVal
+            theValues = squares.elementAt(searchArray[altArea1][i]).getToolTipText().trim();
+            if (theValues.contains(theVal)) {
+                if(pendingReductions) {
+                    theIndex = theValues.indexOf(theVal);
+                    theValues = theValues.substring(0, theIndex) + theValues.substring(theIndex + 1);
+                    squares.elementAt(searchArray[altArea1][i]).setToolTipText(" " + theValues);
+                    msg += altName + " " + String.valueOf(altArea1+1) + " " + areaName + " " +
+                            String.valueOf(i+1) + ", ";
+                } else {
+                    return true;
+                }
+            }
+        } // end for
+
+        for (int i = 0; i < 9; i++) { // Check altArea2
+            if (i == area1) continue;
+            if (i == area2) continue;
+            theValues = squares.elementAt(searchArray[altArea2][i]).getToolTipText().trim();
+            if (theValues.contains(theVal)) {
+                if(pendingReductions) {
+                    theIndex = theValues.indexOf(theVal);
+                    theValues = theValues.substring(0, theIndex) + theValues.substring(theIndex + 1);
+                    squares.elementAt(searchArray[altArea2][i]).setToolTipText(" " + theValues);
+                    msg += altName + " " + String.valueOf(altArea2+1) + " " + areaName + " " +
+                            String.valueOf(i+1) + ", ";
+                } else {
+                    return true;
+                }
+            }
+        } // end for
+
+        for (int i = 0; i < 9; i++) { // Check altArea3
+            if (i == area2) continue;
+            if (i == area3) continue;
+            theValues = squares.elementAt(searchArray[altArea3][i]).getToolTipText().trim();
+            if (theValues.contains(theVal)) {
+                if(pendingReductions) {
+                    theIndex = theValues.indexOf(theVal);
+                    theValues = theValues.substring(0, theIndex) + theValues.substring(theIndex + 1);
+                    squares.elementAt(searchArray[altArea3][i]).setToolTipText(" " + theValues);
+                    msg += altName + " " + String.valueOf(altArea3+1) + " " + areaName + " " +
+                            String.valueOf(i+1) + ", ";
+                } else {
+                    return true;
+                }
+            }
+        } // end for
+
+        // If we came here with pendingReductions then we must have done them above, and
+        // now we need to return a true, without regard to which areas were reduced.
+        if(pendingReductions) {
+            msg = "\tIn stripSword, removed [" + theVal + "] from " + msg;
+            System.out.println(msg.substring(0, msg.length()-2));
+            return true;
+        }
+
+        return false;
+    } // end stripSword
+
+
     // Given an X as implied by the supplied rows, columns and value,
     //   remove other instances of the value from the columns.
     private void stripX(int areaType, int row1, int row2, int col1, int col2, String theVal) {
         String theValues;
         int theIndex;
 
-        //System.out.print("In stripX for val: [" + theVal + "] on rows: ");
-        //System.out.print(row1 + ", " + row2);
-        //System.out.println(" & cols: " + col1 + ", " + col2);
+        System.out.print("\tIn stripX for val: [" + theVal + "] on rows: ");
+        System.out.print(String.valueOf(row1+1) + ", " + String.valueOf(row2+1));
+        System.out.println(" & cols: " + String.valueOf(col1+1) + ", " + String.valueOf(col2+1));
 
         int [][] searchArray;
         if(areaType == ROW) {
@@ -2127,67 +2536,13 @@ public class Laffingas extends JPanel implements Values, ActionListener {
     } // end sweep
 
 
-    // A way of sending output to the screen, that can easily be 'silenced'
-    // with a change to a global boolean flag.
-    private void loggit(String message) {
-        if (debug) System.out.println(message);
+    // Given two areas (any type), put them in ascending order, add 1
+    // so that they represent the user's perspective rather than a zero-based
+    // index, and return them in a single (printable) String.
+    public String twoAreasToString(int a1, int a2) {
+        int first = Math.min(a1, a2);
+        int second = Math.max(a1, a2);
+        return String.valueOf(first+1) + "&" + String.valueOf(second+1);
     }
-
-    private void setOptionsFromConfig() {
-        String strAutoDelay = config.getProperty("AUTO_DELAY");
-        autoDelay = Integer.parseInt(strAutoDelay);
-
-        String strMethodOrder = config.getProperty("METHOD_ORDER");
-        String[] strArrayMO = strMethodOrder.split(",");
-        methodOrder = new ArrayList<Integer>();
-        for(String s: strArrayMO) {
-            methodOrder.add(Integer.parseInt(s));
-        }
-        System.out.println(methodOrder);
-    }
-
-    private MouseAdapter makeMouseAdapter() {
-        return new MouseAdapter() {
-            public void mousePressed(MouseEvent e) {
-
-                String theValues = " 123456789";
-                JLabel jl = (JLabel) e.getSource();
-                String startText = jl.getText();
-                String ttText;
-                int adjust = 1;
-
-                ttText = jl.getToolTipText(); // Note - no trim here.
-                if (ttText != null) {
-                    if (ttText.length() == 1) return; // Original definition, or solution.
-                    // User-defined answers will have length 2 since a blank is
-                    //   another possibility, to allow them to un-set the value.
-                } // end if
-
-                // Look for right mouse press.
-                int m = e.getModifiers();
-                if ((m & InputEvent.BUTTON3_MASK) != 0) adjust = -1;
-
-                if (intState == DEFINING) {
-                    int index = theValues.indexOf(startText);
-                    index += adjust;
-                    if (index > 9) index = 0;
-                    if (index < 0) index = 9;
-                    jl.setText(theValues.substring(index, index + 1));
-                } // end if
-
-                if (intState == SOLVING) {
-                    theValues = jl.getToolTipText();
-                    int theMax = theValues.length() - 1;
-                    int index = theValues.indexOf(startText);
-                    index += adjust;
-                    if (index > theMax) index = 0;
-                    if (index < 0) index = theMax;
-                    jl.setText(theValues.substring(index, index + 1));
-                    jl.setForeground(Color.blue);
-                } // end if
-            } // end mousePressed
-        };
-    }
-
 
 } // end class

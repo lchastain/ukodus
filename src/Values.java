@@ -38,7 +38,9 @@ public interface Values {
             "Box (inside) interaction with Column",
             "Box (inside) interaction with Row",
             "Box (outside) interaction with Column",
-            "Box (outside) interaction with Row"
+            "Box (outside) interaction with Row",
+            "Swordfish - 3 Columns",
+            "Swordfish - 3 Rows"
     ));
 
 }
