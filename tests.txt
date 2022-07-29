@@ -1,0 +1,14 @@
+Visual / integration tests; not sure how to automate or code into a unit test:
+
+Startup screen has 4 buttons in a vertical column
+Startup screen has menubar with main items:  File, View, Help (right justified).
+Solution phase should not have a 'Save' button.
+Save of a loaded file should suggest filename; otherwise, empty.
+When user supplies a save name, the title changes if successful save.
+
+After a (partial) solution is Reset - should go back to the end of the puzzle
+    definition phase.  No tooltips, all values mouse-clickable into any square,
+    black color values, the 'Save' button is present, and 'Start' will move you
+    into the solution phase, as it normally does.
+
+

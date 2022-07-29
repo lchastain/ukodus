@@ -1,0 +1,38 @@
+This is an ongoing wish list.
+Items are moved to the 'DEVELOP.LOG' after they are either implemented or addressed
+  as being no longer desired.
+
+===========================================================================================
+
+isAreaXreducible and stripX - very similar - consider combining.
+Probably same is true of the 'Naked' methods.  Have now done just
+that, with the Swordfish.
+
+a Deployment / installation mechanism
+
+Make the help info - cross-platform
+    Tried to generate - many images missing?  And others not formatted well.
+
+Need a menu-based 'update', to adjust tool-tips to account for user-entered values
+when they do not want to press 'Next'.
+
+Make the 'Explanation' menu item (enabled along with remove highlight) work, to give the same
+basic info that goes to the System.out ?  Better format, of course.
+Develop and show explanations of pending reductions -
+          X-wing, Naked Pair, Hidden Pair (all, actually)
+
+Add content to Help / About
+
+Keyboard entry for puzzle definition.  Need key listener,
+      also a way to indicate which is active,
+    and a way to move to another square.
+
+Recognize when the reductions have removed all possibilities -
+   show an invalid puzzle and stop, as opposed to 'cannot find...'.
+
+Add key listener to the method reorder.  Can handle arrows
+and upper/lower case chars; the one to move will need a highlight of some kind,
+and a key sequence to move the highlight, vs the highlighted item.  Low priority,
+but may be easy if we go ahead and add key listener to the puzzle def phase.
+
+

@@ -1,0 +1,179 @@
+Next:
+    reorg the batch script(s) and data, re-clone to verify a complete project.
+    Move the 'help' over to the readme, remove the .chm file
+
+
+29 Jul 2022 - Updated to Java 16, added several missing support files to the repo.
+Not yet restarting any work here; just making sure GitHub has a complete project.
+
+1/2/2014 - Completed the bulk of the Swordfish yesterday; had to leave small ordering issues till
+this morning; now resolved, committed and pushed - Swordfish is complete.  Don't have a next step
+planned, atm, and no - no new solutions.
+
+12/30/2013 - Now proceeding with Swordfish.  But starting it from an X, which appears now that
+it may be flawed; could 'give up' before checking all possibilities.
+So - reworking it, first.
+And this is showing that it is really tedious to have to re-set the reorder, every time I restart
+    the app.  Switching over to doing the config store, as an aid to the X-wing rewrite.
+1619 and now that is done.
+        Save a new config file if any value changes.
+1723 Now done with the rework; I know that it is better but don't see any differences.  The
+reworked X is now usable as a template from which to start the Swordfish (redo the copy/paste, again).
+But first thing tomorrow (0830) - need to leave for the auto-body place.
+
+12/29/2013 - After applying to four different companies, came back here to add
+the 'findOutsideBox' method  - have now done that;
+it didn't help with any of the currently unsolved, but it is working.
+
+12/28/2013 - Implemented the methodOrder way of calling the methods, but now after
+putting highlander and lone ranger at the bottom, reached an impossible solution.
+Don't yet know why; need to fix this before anything else.  Let it solve it correctly
+first, then try this again and compare squares to see if any are wrong.  Otherwise
+it just may be that highlanders were removed as possibilities before they were
+ever assigned.
+0852 - It was because (in findInsideBox) we checked to see that all squares to consider had two or more
+possibilities, which one did not since highlander should have already solved it.  After
+removing that condition now that highlander does not necessarily come first, it all works.
+Will keep checking this, but it appears to
+be what is needed to get all remaining screenshots for the help file, as well as
+rewrite the examples spreadsheet for the files we are keeping.
+1255 After return from the walk in the park - decided to implement option resets, individually
+for each dialog that takes the new input.
+And then - after seeing the effort involved, only did it for the reordering.  For autoDelay,
+just added the default value to the prompt - let the user put it back there.  So this is done:
+    Reset config values to defaults -
+        Each input setting dialog should have a custom 'Reset' button.
+        Takes place immediately.
+For this one:
+    'reset' does not put the tooltips back to initial state; it seems to be
+    half back to puz def, since 'save' button appears, but no mouse clicks working
+    other than the buttons or menu items.
+  - decided to make 'Reset' take us back to puzzle definition mode, just before 'Start' is pressed.
+  did that; now behavior is as expected, and consistent.
+1500 Broke this out, since it has been completed over the last few days:
+    Config file:
+        read existing config file, use those values.
+        OR
+        if no config file - start out with defaults.
+  - The other part still remaining to do:  write the config file whenever a change is made.  Not
+  as high of a priority as getting the help file finalized, so leaving it as-is, for now.
+1703 Finished getting screenshots, wrapped up the help file, now want to stop altogether and get
+going on job applications.  Do not know when (if) I will come back to this.
+    Done:   Move the 'readme' file into the help/.chm file.
+
+12/27/2013 - The Readme.txt file is now entirely incorporated into the help file, but
+it does need work there and more screenshot examples.  But a big help in getting those
+examples will be if we have the 'method priority' setting done and working.  Will
+work on that, today.
+Decided that the underlying data for this will be an integer array, where the actual
+method names are each given a number (internally, not viewable by user).  Then, based
+on the number we have, run that method.  'findNext' will have to now cycle thru the
+array and make repeated calls to a new method that runs the correct one.
+And the first step was to make/read a config file to hold the methodOrder.  And as
+long as I was doing that, went ahead and added the autoDelay to the config.  Now -
+need to work on the UI, to allow the reordering.
+1220 First part is done; method name selections are displayed.  Now add sorting.
+1434 The reorder UI is working; need to now 'collect' the answer, and handle a cancel.
+
+12/26/2013 - Spent a LOT of time on the 'checkReferences' method, only to decide
+that it is already working perfectly.  So the end result was to re-wordsmith the
+hell out of the comments.
+
+12/25/2013
+    Added the COL variation of the X-wing; did not make any fiendish progress but
+    at least this one is done.  Still want to do more box interaction, too.  Recent
+    reorder, plus this new one in the mix - has changed the 'sample' results.  May
+    want to implement a 'priority' way to dynamically reorder (per wishlist).
+    Then - I put an updated copy into leeData, for execution from the window icon.  To get
+        it to work, had to copy out all the .class files from the production subdir to
+        the top level.  But that doesn't matter down leeData, which is a throw-away.
+        The take-away from this is that I need a deployment/installation mechanism.
+
+12/24/2013
+    Worked on the help file - now have a good section for the Lone Ranger.
+    And reworked the images so far.
+
+Removing this from the readme: (no longer sure of original source, either)
+  --  NO GOOD EXAMPLE OF THIS, YET --
+  Interchange (I am, there4 I valid) - Several sources have stated that a 'valid' sudoku
+    will have one and only one solution.  We can use this 'law' to remove two
+    possible values from one square where, if either were used, it would set up
+    a situation within the matrix where the solution in progress has two
+    interchangeable variations (and relying on our 'law', presumably neither
+    situation would ultimately be correct, because the other one would
+    then also be possible).  Start by looking at all possible rectangles within
+    the matrix that can be formed from unsolved squares at their four corners.
+    Now find such a rectangle (if one exists) where at 3 of the 4 corners,
+    the possibilities are the same two values (and no others), and at the other corner
+    both of those two values are also present, along with one or more other
+    possibilities.  In that fourth corner square, the two values from the other
+    three corners may be removed as possibilities because using either one of
+    them would then lead to an interchangeable situation.
+	Follow-on note:  Obviously, if you find a rectangle where the same two possibilities (and
+	no others) are at every corner, then you do have a multiple-solution sudoku.  The existence
+	of law-breakers is not unheard of.
+because it is so unlikely that we will ever care about it.
+
+
+
+12/23/2013
+    On this one -
+      It is done, but the value is only retained for the current run.  Default 700ms.
+        Make the pause (milliseconds) between solutions - configurable
+    Verified that there is another version of X-wing to be developed, and
+       more of the box interactions (outside).
+    Working on the ability to pause correctly on a findSimple method - and looking at the
+        reports given on those cases:  'Count Found' - ?? just a runing total of the number
+        of assignments made.  Not helpful, and the tracking of it is problematic since it
+        is used to control an early 'findNext' bailout.  Will try to remove all of it..
+    This is done now:
+        Stop the autosolution on a findSimple - seems to always go on one more.
+            May be able to do this by breaking them apart into an also two-pass operation.
+            and/or - add a way to 'go back' - an 'undo'
+    The removal and two-pass approach succeeded, but now the remnant leftover problem has
+        returned; seems to have been avoided by the earlier approach, but not 'cured'; the
+        problem was there all along but now becomes visible.  Need to track this down..
+    It is now obvious that both a LR and a NP solution are highlighted in a first-pass.
+    Found/fixed the problem - the end of findSimple did not reassign the last LR return val.
+12/22/2013 Began adding screenshots of methods, to the help file.
+More items completed from the wishlist:
+    Pause a solution in progress at appropriate times -
+        after the file selection dialog is shown
+        going back to 'getting started'
+        documentation
+    Verify every puzzle in Data is solvable, even if ukodus cannot.
+        For these, all (currently) six 'evil' examples (from websudoku) are solvable.
+        The two fiendish - one source known, another not - get stuck.
+        The 'two sol' - source unknown, not solveable, may remove.
+      Note that the reason this was on the wishlist was to 'clean' them, pre-deployment.
+      Now, due to copyright concerns, the ukodus program will not ever be deployed with
+      examples, other than partial solutions as shown embedded (without attribution) in
+      the help file.  So - the 'wish' evaporates.  Will keep the difficult ones only to
+      see if other approaches will eventually work.
+    blockcolrow3 solution - has a lone ranger that does not de-highlight before
+        a hidden pair; you get a mix.  fix this.
+      This was caused by development today - retraced steps, to fix.
+
+12/20/2013 Did these, from the wishlist:  'Save' dialog overwrite warning for user-entered name
+  Only have a 'remove highlighting' menu choice when there is something highlighted.
+  Only have a 'Restart' menu choice when the matrix is showing.
+
+12/20/2013 Didn't have one of these (a log file) for the initial work back in 2007.  Starting it now
+    for the continuation work, and because the timeline file on leemac is not accepting
+    copy/paste from here.  So, from the wishlist:
+        Separate puzzle definition from solution phase
+            Explain the two phases, make clear distinctions as to which one is active.
+    is being removed from that file, as completed (to a degree) - the help file does some explanation
+    and the phase you are in should be obvious to you from the operations that are possible or
+    ongoing, but not going to do anything more explicit for it.  Will continue to ensure that all
+    menu items and buttons are consistent with the current state and phase.
+
+=========================================================================================
+The first round of development ended in Jan of 2008, whereas the next round began in Dec 2013.  
+For the first version, the app was named 'Dyevat', an approximation of the Russian word for 9.  
+Second version (now named ukodus) is maintained in GitHub; if a snapshot is taken, it only 
+needs to be the most recent version.
+
+
+
+

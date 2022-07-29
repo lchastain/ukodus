@@ -2189,7 +2189,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
         JLabel jl;
         String theIntersects;
         String strChoices;
-        String strFewerChoices;
+        StringBuilder strFewerChoices;
         String aChar;
 
         // First, look to see if a value for the square has been set and if so,
@@ -2209,7 +2209,7 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
             theIntersects = getIntersects(i);
             strChoices = jl.getToolTipText().trim();
-            strFewerChoices = " ";
+            strFewerChoices = new StringBuilder(" ");
 
             // Examine the choices that were available after the last
             //   resweep and compare to (possibly new) intersects.
@@ -2217,10 +2217,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
                 aChar = strChoices.substring(j, j + 1);
                 // If this possibility is now an intersect, do not keep it.
                 if (theIntersects.contains(aChar)) continue;
-                strFewerChoices += aChar;
+                strFewerChoices.append(aChar);
             } // end for i - each char of strChoices
 
-            jl.setToolTipText(strFewerChoices);
+            jl.setToolTipText(strFewerChoices.toString());
         } // end for
     } // end resweep
 
@@ -2279,17 +2279,10 @@ public class Laffingas extends JPanel implements Values, ActionListener {
 
     public void setTheArray(int intAreaType) {
         switch (intAreaType) {
-            case BOX:
-                theArray = boxIndices;
-                break;
-            case COL:
-                theArray = colIndices;
-                break;
-            case ROW:
-                theArray = rowIndices;
-                break;
-            default:
-                theArray = null;
+            case BOX -> theArray = boxIndices;
+            case COL -> theArray = colIndices;
+            case ROW -> theArray = rowIndices;
+            default -> theArray = null;
         } // end switch
     } // end setTheArray
 

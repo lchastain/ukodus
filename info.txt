@@ -1,0 +1,22 @@
+There are untracked files here!  Such as this one, the data, the
+development.log, etc.  This means - GitHub should not be the only
+backup location; need to make a snapshot backup.
+
+=======================================================================
+If not running the app from Intellij, there are at least two other
+ways to do it:
+
+1.  Copy all the .class files to the top level (so they can be 'run'
+	while having direct access to the 'data' directory).
+	Make a shortcut starting in that dir, with this target:
+	"C:\Program Files\Java\jre7\bin\java.exe" Main
+
+2.  Use the 'make.bat' script to create a .jar file.
+	Make a shortcut starting in that dir, with this target:
+	"C:\Program Files\Java\jre7\bin\java.exe" -classpath ukodus.jar Main
+
+=======================================================================
+By keeping the desktop shortcut as a link to the jar file in the 
+development folder, we get a runtime version in an easy to locate
+directory that is easily kept up with latest features but remains 
+stable/last good version as a reference until the next time the jar is recreated.
