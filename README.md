@@ -20,7 +20,7 @@ Why is the matrix class called 'laffingas' ?
     as 'NO' which is also the word 'no', that when translated to German is
     'nein', which sounds a lot like the English word for the numeric value 'nine',
     which is the number of rows and columns in a standard sudoku puzzle, and you
-    gotta admit - this chain of 'logic' is kind of funny.
+    gotta admit - this chain of convoluted logic is kind of funny.
 
 
 
